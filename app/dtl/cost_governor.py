@@ -1,16 +1,35 @@
-from typing import Tuple, Optional
-from ..models.transactions import SyntheticTransaction, CartItem
-from ..models.state import DTLGlobalAuthorityState, TransactionState, DefensePolicy
+"""
+Graceful economic containment.
+
+A blanket block is itself an attack surface: flood an authorizer with
+revocations and you lock the real customer out of their own money. The governor
+therefore answers each authority violation with the SMALLEST response that
+restores the grant, and the response depends on WHICH dimension was violated:
+
+    PURPOSE  (INV_02) -> partial authorization: clear the genuine basket value,
+                         quarantine only the stored-value portion
+    AMOUNT   (INV_01) -> headroom cap: authorise what is still inside the grant
+    PER_TX   (INV_05) -> step-up: the user, not the agent, approves this one
+    RAIL     (INV_04) -> rail-scope block: nothing is booked, the permitted
+                         rails stay usable
+    MERCHANT (INV_03) -> scope quarantine to a shadow ledger
+    TIME     (INV_06) -> hold pending re-consent
+
+Only the AMOUNT and PURPOSE paths book money. Scope violations consume no
+authority at all, which is the point: the agent keeps its remaining grant and
+the user keeps their working payment instruments.
+"""
+
+from typing import Optional, Tuple
+
 from ..models.proofs import SemanticDriftProof
+from ..models.state import DefensePolicy, DTLGlobalAuthorityState, TransactionState
+from ..models.transactions import CartItem, SyntheticTransaction
+
 
 class AdversarialCostGovernor:
-    """
-    Executes Graceful Economic Containment:
-    Instead of hard-blocking the entire user card / killing the AI butler, it executes:
-    1. Partial Authorization: Approves legitimate grocery items (e.g. ₹1,000 milk/eggs).
-    2. Shadow Quarantine: Routes unauthorized liquid/gift card items to decoy ledger.
-    3. Capability Degradation: Downgrades the agent's single-tx limit to prevent further drain.
-    """
+    """Turns a proven authority violation into a proportionate action."""
+
     def __init__(self):
         pass
 
@@ -22,10 +41,63 @@ class AdversarialCostGovernor:
     ) -> Tuple[SyntheticTransaction, str]:
         """
         Applies economic containment without breaking legitimate commerce.
+        Returns the mutated transaction and a human-readable action string.
         """
-        # Separate legitimate grocery items from stored-value items
-        legitimate_items = []
-        quarantined_items = []
+        code = proof.invariant_code
+
+        # ---------------------------------------------- RAIL scope violation
+        # The user authorised other rails; those must keep working. Nothing is
+        # booked against the ceiling, because no authority was legitimately used.
+        if code == "INV_04_UNAUTHORIZED_RAIL":
+            tx.state = TransactionState.QUARANTINED
+            permitted = ", ".join(auth.permitted_rail_values) or "none"
+            rail = str(getattr(tx.rail, "value", tx.rail))
+            tx.containment_action = (
+                f"RAIL_SCOPE_BLOCK: ₹{tx.amount:,.2f} on {rail} refused - that rail is outside the "
+                f"delegation. Permitted rails ({permitted}) remain fully usable and no headroom was "
+                f"consumed."
+            )
+            auth.active_policy = DefensePolicy.STRICT_INVARIANT
+            return tx, tx.containment_action
+
+        # ------------------------------------------ PER-TX cap: escalate, not block
+        # The grant is intact; only this one action is too large to be autonomous.
+        if code == "INV_05_PER_TX_CAP_EXCEEDED":
+            cap = auth.per_transaction_cap or 0.0
+            tx.state = TransactionState.QUARANTINED
+            tx.containment_action = (
+                f"STEP_UP_REQUIRED: ₹{tx.amount:,.2f} exceeds the ₹{cap:,.2f} per-transaction cap. "
+                f"Held for user confirmation rather than declined - the agent may still transact "
+                f"up to ₹{cap:,.2f} without interruption."
+            )
+            auth.active_policy = DefensePolicy.STEP_UP_VERIFICATION
+            return tx, tx.containment_action
+
+        # ------------------------------------------------- TIME: re-consent
+        if code == "INV_06_AUTHORITY_EXPIRED":
+            tx.state = TransactionState.QUARANTINED
+            tx.containment_action = (
+                f"RE_CONSENT_HOLD: the delegation lapsed at {auth.expires_at.isoformat()}. "
+                f"₹{tx.amount:,.2f} is held pending a fresh grant; the user's own instruments are "
+                f"untouched."
+            )
+            auth.active_policy = DefensePolicy.STEP_UP_VERIFICATION
+            return tx, tx.containment_action
+
+        # ------------------------------------------ MERCHANT scope violation
+        if code == "INV_03_UNAUTHORIZED_MCC":
+            tx.state = TransactionState.QUARANTINED
+            tx.containment_action = (
+                f"SCOPE_QUARANTINE: MCC {tx.merchant_mcc} is outside the delegated categories "
+                f"{auth.permitted_mccs}. ₹{tx.amount:,.2f} routed to the shadow ledger; in-scope "
+                f"merchants continue to clear normally."
+            )
+            auth.active_policy = DefensePolicy.STRICT_CATALOG_ATTESTATION
+            return tx, tx.containment_action
+
+        # --------------------------------- PURPOSE drift: split the basket
+        legitimate_items: list[CartItem] = []
+        quarantined_items: list[CartItem] = []
         legit_total = 0.0
         quarantine_total = 0.0
 
@@ -49,8 +121,8 @@ class AdversarialCostGovernor:
             auth.global_budget_ceiling = max(0.0, auth.global_budget_ceiling - legit_total)
             return tx, tx.containment_action
 
-        elif proof.invariant_code == "INV_01_GLOBAL_BUDGET_EXCEEDED":
-            # OVER-BUDGET SPLIT CONTAINMENT
+        # ------------------------------------- AMOUNT: cap at real headroom
+        elif code == "INV_01_GLOBAL_BUDGET_EXCEEDED":
             available_headroom = auth.authority_headroom
             if available_headroom > 0:
                 tx.state = TransactionState.QUARANTINED

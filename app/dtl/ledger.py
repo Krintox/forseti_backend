@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 from ..models.state import DTLGlobalAuthorityState, PaymentRailType, DefensePolicy
 from ..models.transactions import SyntheticTransaction, TransactionState
@@ -51,8 +51,18 @@ class DTLLedger:
             auth.cumulative_spent_settled += amount
             auth.last_updated_at = datetime.utcnow()
 
-    def reset_authority(self, authority_id: str, budget: float = 10000.0):
-        self.authorities[authority_id] = DTLGlobalAuthorityState(
+    def reset_authority(self, authority_id: str, budget: float = 10000.0,
+                        profile: Optional[Dict[str, Any]] = None):
+        """
+        Re-grants the authority from scratch.
+
+        `profile` carries the NON-monetary dimensions of the grant (permitted
+        rails, per-transaction cap, MCC scope, validity window, purpose). A
+        delegation is not just a ceiling, so re-granting must be able to restate
+        all of it - that is how the arena models "₹12,000, groceries, UPI only,
+        this week" as opposed to "₹12,000".
+        """
+        fields: Dict[str, Any] = dict(
             authority_id=authority_id,
             principal="user_shashank_primary",
             agent_id="agent_household_butler",
@@ -61,5 +71,27 @@ class DTLLedger:
             cumulative_spent_authorized=0.0,
             pending_spend_global=0.0,
             reserved_spend_global=0.0,
-            active_policy=DefensePolicy.STANDARD
+            active_policy=DefensePolicy.STANDARD,
         )
+        allowed = set(DTLGlobalAuthorityState.model_fields.keys())
+        for key, value in (profile or {}).items():
+            if key in allowed and value is not None:
+                fields[key] = value
+        self.authorities[authority_id] = DTLGlobalAuthorityState(**fields)
+        return self.authorities[authority_id]
+
+    def update_authority_scope(self, authority_id: str,
+                               profile: Dict[str, Any]) -> Optional[DTLGlobalAuthorityState]:
+        """
+        Applies dimension changes to a LIVE grant, preserving exposure already
+        booked so an operator can watch headroom and scope tighten in real time.
+        """
+        auth = self.get_authority(authority_id)
+        if auth is None:
+            return None
+        allowed = set(DTLGlobalAuthorityState.model_fields.keys())
+        for key, value in profile.items():
+            if key in allowed and value is not None:
+                setattr(auth, key, value)
+        auth.last_updated_at = datetime.utcnow()
+        return auth

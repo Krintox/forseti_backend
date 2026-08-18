@@ -74,6 +74,10 @@ def ai_status() -> Dict[str, Any]:
         "llm": get_client().status(),
         "agents": A.AGENT_CATALOG,
         "agent_count": len(A.AGENT_CATALOG),
+        # Served alongside the catalog so the UI can never present twelve agents
+        # as twelve independent inventions. The DTL is the invention; these are
+        # the intelligence layer around it.
+        "hierarchy": A.SYSTEM_HIERARCHY,
         "design_rule": "The LLM never decides an authorization outcome. It explains, "
                        "translates and proposes; every proposal is schema-validated and "
                        "re-checked by the deterministic engine.",

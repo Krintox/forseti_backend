@@ -9,7 +9,10 @@ class SemanticDriftProof(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
     # Invariant Details
-    invariant_code: str  # e.g., "INV_01_GLOBAL_BUDGET_EXCEEDED" or "INV_02_SEMANTIC_INTENT_DRIFT"
+    invariant_code: str  # e.g., "INV_01_GLOBAL_BUDGET_EXCEEDED" or "INV_04_UNAUTHORIZED_RAIL"
+    # Which dimension of the user's delegated authority this violates:
+    # AMOUNT | PER_TX | RAIL | MERCHANT | PURPOSE | TIME
+    authority_dimension: str = "AMOUNT"
     severity: str = "CRITICAL" # LOW, MEDIUM, HIGH, CRITICAL
     
     # Semantic breakdown

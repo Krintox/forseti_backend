@@ -29,6 +29,11 @@ from ..dtl.ledger import DTLLedger
 from ..feedback.feedback_engine import ClosedLoopFeedbackEngine
 from ..models.state import DefensePolicy, PaymentRailType
 from ..models.transactions import SyntheticTransaction
+from ..redteam.vectors.authority_scope import (
+    LapsedMandateVector,
+    PerTransactionBreachVector,
+    RailScopeViolationVector,
+)
 from ..redteam.vectors.cross_rail_split import CrossRailSplitVector
 from ..redteam.vectors.intent_laundering import IntentLaunderingVector
 from ..redteam.vectors.other_vectors import (
@@ -49,6 +54,9 @@ STRATEGY_BY_ROUND = {
     4: "REVOCATION_FLOOD",
     5: "VELOCITY_BURST",
     6: "SCOPE_CREEP",
+    7: "RAIL_SCOPE_VIOLATION",
+    8: "PER_TX_BREACH",
+    9: "LAPSED_MANDATE",
 }
 
 STRATEGY_NARRATIVE = {
@@ -58,6 +66,35 @@ STRATEGY_NARRATIVE = {
     "REVOCATION_FLOOD": "Race revocation and re-grant so a stale delegation authorises the spend.",
     "VELOCITY_BURST": "Probe with many small transactions that each sit below the review threshold.",
     "SCOPE_CREEP": "Extend the purchase scope past the delegated economic purpose.",
+    "RAIL_SCOPE_VIOLATION": "Stay inside the money limit, but use a payment rail the user never authorised.",
+    "PER_TX_BREACH": "Keep the aggregate legal while breaking the per-transaction bound the user set.",
+    "LAPSED_MANDATE": "Present a perfectly in-scope basket after the delegation's validity window closed.",
+}
+
+# Which dimension of the delegated authority each vector is designed to attack.
+# The flagship cross-rail split is only one row of this table, and saying so is
+# what makes the concept defensible: FORSETI protects delegated authority, of
+# which the money limit is a single dimension.
+STRATEGY_DIMENSION = {
+    "CROSS_RAIL_SPLIT": "AMOUNT",
+    "INTENT_LAUNDERING": "PURPOSE",
+    "SCOPE_CREEP": "MERCHANT",
+    "RAIL_SCOPE_VIOLATION": "RAIL",
+    "PER_TX_BREACH": "PER_TX",
+    "LAPSED_MANDATE": "TIME",
+    "BASELINE_POISONING": "AMOUNT",
+    "REVOCATION_FLOOD": "TIME",
+    "VELOCITY_BURST": "AMOUNT",
+}
+
+# Vectors that only mean something against a specific grant. Running "UPI only"
+# against an all-rails delegation would prove nothing, so the arena re-grants
+# the authority the way the user would have stated it, emits it as an event, and
+# only then lets the Red agent move.
+STRATEGY_AUTHORITY_PROFILE = {
+    "RAIL_SCOPE_VIOLATION": RailScopeViolationVector.authority_profile,
+    "PER_TX_BREACH": PerTransactionBreachVector.authority_profile,
+    "LAPSED_MANDATE": LapsedMandateVector.authority_profile,
 }
 
 
@@ -108,6 +145,18 @@ class ArenaBattleOrchestrator:
         auth.last_updated_at = datetime.now(timezone.utc)
         return self.get_state()
 
+    def set_authority_scope(self, profile: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Applies operator-entered NON-monetary authority dimensions - permitted
+        rails, per-transaction cap, validity window, purpose - on top of the
+        live grant. This is what lets an operator actually state "₹12,000,
+        UPI only" instead of only ever changing the ceiling.
+        """
+        auth = self.ledger.update_authority_scope(AUTHORITY_ID, profile)
+        if auth is not None and "global_budget_ceiling" in profile:
+            self.configured_ceiling = auth.global_budget_ceiling
+        return self.get_state()
+
     def get_state(self) -> Dict[str, Any]:
         auth = self.ledger.get_authority(AUTHORITY_ID)
         # mode="json" coerces datetimes and enums to primitives. Without it the
@@ -124,8 +173,11 @@ class ArenaBattleOrchestrator:
             (auth.total_exposure_global / auth.global_budget_ceiling * 100.0)
             if auth.global_budget_ceiling > 0 else 0.0, 2
         )
+        state["permitted_rails"] = auth.permitted_rail_values
         return {
             "authority_state": state,
+            "authority_vector": auth.authority_vector(),
+            "invariant_registry": self.invariant_engine.registry(),
             "detector_status": self.detector.status(),
             "pqc_status": self.pqc_module.provider_status(),
             "active_policy": str(getattr(auth.active_policy, "value", auth.active_policy)),
@@ -142,6 +194,12 @@ class ArenaBattleOrchestrator:
             return CrossRailSplitVector.generate_attack(AUTHORITY_ID)
         if strategy == "INTENT_LAUNDERING":
             return [IntentLaunderingVector.generate_attack(AUTHORITY_ID)]
+        if strategy == "RAIL_SCOPE_VIOLATION":
+            return RailScopeViolationVector.generate_attack(AUTHORITY_ID)
+        if strategy == "PER_TX_BREACH":
+            return PerTransactionBreachVector.generate_attack(AUTHORITY_ID)
+        if strategy == "LAPSED_MANDATE":
+            return LapsedMandateVector.generate_attack(AUTHORITY_ID)
         if strategy == "BASELINE_POISONING":
             return [BaselinePoisoningVector.generate_attack(AUTHORITY_ID)]
         if strategy == "REVOCATION_FLOOD":
@@ -185,6 +243,20 @@ class ArenaBattleOrchestrator:
         self.simulator.reset_all_rails()
 
         strategy = strategy_override or STRATEGY_BY_ROUND.get(round_number, "SCOPE_CREEP")
+
+        # Vectors that attack a non-monetary dimension only mean something
+        # against a grant that actually states that dimension. Re-grant it here,
+        # from the vector's own declared profile, so the picture the judge sees
+        # is the delegation the attack was designed against - never an implied one.
+        profile = STRATEGY_AUTHORITY_PROFILE.get(strategy)
+        if profile:
+            auth = self.ledger.reset_authority(
+                AUTHORITY_ID,
+                budget=float(profile.get("global_budget_ceiling", self.configured_ceiling)),
+                profile=profile,
+            )
+            self.configured_ceiling = auth.global_budget_ceiling
+
         attacks = self._select_attack(strategy)
         total_objective = sum(t.amount for t in attacks)
         exp_id = self.recorder.experiment_id
@@ -194,6 +266,28 @@ class ArenaBattleOrchestrator:
             kwargs.setdefault("round_id", round_number)
             return ArenaEvent(**kwargs)
 
+        vector = auth.authority_vector()
+        await self._emit(event_callback, ev(
+            event_type=EventType.AUTHORITY_GRANTED, actor=Actor.DTL,
+            source="principal", target="dtl",
+            arrow_label=(f"USER GRANT: Rs {auth.global_budget_ceiling:,.0f} · "
+                         f"{'/'.join(r.split('_')[0] for r in auth.permitted_rail_values) or 'no rail'} · "
+                         f"{auth.validity_window_hours:.0f}h"),
+            severity="info",
+            payload={
+                "authority_id": auth.authority_id,
+                "principal": auth.principal,
+                "agent_id": auth.agent_id,
+                "authority_vector": vector,
+                "targeted_dimension": STRATEGY_DIMENSION.get(strategy, "AMOUNT"),
+                "profile_applied": bool(profile),
+                "description": (
+                    "The grant, stated in every dimension it has. The attack below targets the "
+                    f"{STRATEGY_DIMENSION.get(strategy, 'AMOUNT')} dimension."
+                ),
+            },
+        ), pause=0.4)
+
         await self._emit(event_callback, ev(
             event_type=EventType.ROUND_STARTED, actor=Actor.SYSTEM,
             arrow_label=f"ROUND {round_number} - {strategy.replace('_', ' ')}",
@@ -201,8 +295,11 @@ class ArenaBattleOrchestrator:
             payload={
                 "strategy": strategy,
                 "narrative": STRATEGY_NARRATIVE.get(strategy, ""),
+                "targeted_dimension": STRATEGY_DIMENSION.get(strategy, "AMOUNT"),
                 "dtl_enabled": dtl_enabled,
                 "delegated_ceiling": auth.global_budget_ceiling,
+                "permitted_rails": auth.permitted_rail_values,
+                "per_transaction_cap": auth.per_transaction_cap,
                 "exposure_before": round(auth.total_exposure_global, 2),
                 "headroom_before": round(auth.authority_headroom, 2),
                 "planned_steps": len(attacks),
@@ -285,7 +382,7 @@ class ArenaBattleOrchestrator:
                 await self._emit(event_callback, ev(
                     event_type=EventType.DTL_EVALUATION, actor=Actor.DTL, step=idx,
                     source="dtl", target="dtl",
-                    arrow_label=f"AGGREGATING ALL RAILS: Rs {projected:,.0f} / Rs {auth.global_budget_ceiling:,.0f}",
+                    arrow_label=f"CHECKING ALL 6 AUTHORITY DIMENSIONS: Rs {projected:,.0f} / Rs {auth.global_budget_ceiling:,.0f}",
                     severity="warning",
                     payload={
                         "exposure_before": round(exposure_before, 2),
@@ -296,10 +393,20 @@ class ArenaBattleOrchestrator:
                         "utilization_pct": round(projected / auth.global_budget_ceiling * 100.0, 2)
                         if auth.global_budget_ceiling > 0 else 0.0,
                         "invariant_expression": "settled + authorized + pending + reserved + new_tx <= ceiling",
+                        # The whole grant is re-checked, not only the money.
+                        "dimensions_checked": [row["dimension"] for row in self.invariant_engine.registry()],
+                        "rail_in_scope": auth.allows_rail(tx.rail),
+                        "mcc_in_scope": tx.merchant_mcc in auth.permitted_mccs,
+                        "per_transaction_cap": auth.per_transaction_cap,
+                        "authority_expired": auth.is_expired(),
                     },
                 ), pause=0.55)
 
-                is_valid, proof = self.invariant_engine.evaluate_invariants(auth, tx)
+                # Every dimension is evaluated, not just the first failure, so a
+                # transaction that breaks the grant in two ways reports both.
+                violations = self.invariant_engine.evaluate_all(auth, tx)
+                proof = violations[0] if violations else None
+                is_valid = not violations
 
                 if is_valid:
                     dtl_status = "INVARIANTS_SATISFIED"
@@ -314,6 +421,12 @@ class ArenaBattleOrchestrator:
                         severity="critical",
                         payload={
                             "invariant_code": proof.invariant_code,
+                            "authority_dimension": proof.authority_dimension,
+                            "all_violated_invariants": [
+                                {"code": p.invariant_code, "dimension": p.authority_dimension,
+                                 "severity": p.severity}
+                                for p in violations
+                            ],
                             "severity": proof.severity,
                             "explanation": proof.explanation,
                             "invariant_expression": proof.invariant_expression,
@@ -532,10 +645,25 @@ class ArenaBattleOrchestrator:
                          "violating_invariant": last_proof.invariant_code if last_proof else None},
             ), pause=0.35)
 
+        # Three genuinely different endings, and conflating them misrepresents
+        # the result. An agent that spends its whole grant without violating any
+        # dimension has NOT beaten the defence - it acted inside its authority,
+        # which is the system working. Only an unchecked breach is a red win.
+        breached = auth.total_exposure_global > auth.global_budget_ceiling
+        if detected:
+            winner, outcome = "BLUE", "CONTAINED"
+            label, severity = "ATTACK CONTAINED", "success"
+        elif not dtl_enabled:
+            winner, outcome = "RED", "UNCHECKED_BREACH"
+            label, severity = "ATTACK SUCCEEDED - NO GLOBAL CHECK", "critical"
+        else:
+            winner, outcome = "NONE", "WITHIN_AUTHORITY"
+            label, severity = "NO VIOLATION - SPEND STAYED INSIDE THE GRANT", "info"
+
         await self._emit(event_callback, ev(
             event_type=EventType.ATTACK_COMPLETE, actor=Actor.SYSTEM,
-            arrow_label=("ATTACK CONTAINED" if detected else "ATTACK SUCCEEDED - NO GLOBAL CHECK"),
-            severity="success" if detected else "critical",
+            arrow_label=label,
+            severity=severity,
             payload={
                 "strategy": strategy,
                 "detected": detected,
@@ -543,8 +671,9 @@ class ArenaBattleOrchestrator:
                 "steps": len(step_results),
                 "final_exposure": round(auth.total_exposure_global, 2),
                 "ceiling": auth.global_budget_ceiling,
-                "breached": auth.total_exposure_global > auth.global_budget_ceiling,
-                "winner": "BLUE" if detected else "RED",
+                "breached": breached,
+                "winner": winner,
+                "outcome": outcome,
             },
         ), pause=0.2)
 
@@ -559,7 +688,8 @@ class ArenaBattleOrchestrator:
             "authority_state": self.get_state()["authority_state"],
             "pqc_audit": pqc_audit,
             "pqc_tamper_tests": tamper,
-            "winner": "BLUE" if detected else "RED",
+            "winner": winner,
+            "outcome": outcome,
             "detected": detected,
             "next_red_plan": next_plan,
             "adaptation_history": self.feedback_engine.get_adaptation_history(),

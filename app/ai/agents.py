@@ -310,6 +310,13 @@ def explain_event(event: Dict[str, Any], context: Optional[Dict[str, Any]] = Non
 # Written from the same event fields the LLM sees, so the panel is never empty
 # and never wrong when the model is unreachable.
 _EVENT_TEMPLATES: Dict[str, Dict[str, str]] = {
+    "AUTHORITY_GRANTED": {
+        "team": "NEUTRAL",
+        "what": "The user's delegation was (re)stated in full: a ceiling of {ceiling}, plus rail, purpose, merchant and time scope.",
+        "how": "The DTL recorded every dimension of the grant, not only the amount, so each can be checked independently.",
+        "why": "A ceiling alone cannot express \"UPI only\" or \"this week only\" - those need their own fields.",
+        "matters": "The attack that follows is scored against every dimension of this grant, not just the number.",
+    },
     "ROUND_STARTED": {
         "team": "NEUTRAL",
         "what": "A new attack round began against a delegated authority of {ceiling}.",
@@ -398,6 +405,39 @@ def deterministic_event_explanation(event: Dict[str, Any]) -> Dict[str, Any]:
         "probability": (f"{float(p['probability']) * 100:.1f}%"
                         if isinstance(p.get("probability"), (int, float)) else "an unavailable score"),
     }
+
+    # INVARIANT_VIOLATION can fire for any of the six authority dimensions
+    # (amount, per-transaction, rail, merchant, purpose, time), each with a
+    # genuinely different mechanism. Rather than force one budget-shaped
+    # template onto all six, use the dimension-specific explanation the
+    # invariant engine itself already produced in dtl/invariant_engine.py.
+    if etype == "INVARIANT_VIOLATION":
+        dimension = str(p.get("authority_dimension", "AMOUNT"))
+        code = str(p.get("invariant_code", "an authority invariant"))
+        explanation = str(p.get("explanation") or "")
+        others = p.get("all_violated_invariants") or []
+        also = ""
+        if len(others) > 1:
+            other_codes = ", ".join(o.get("code", "") for o in others[1:] if o.get("code"))
+            also = f" It also violates {other_codes} at the same time."
+        if not explanation:
+            explanation = (f"Invariant {code} failed: exposure would reach {fields['exposure_after']} "
+                           f"against a ceiling of {fields['ceiling']}.")
+        return {
+            "headline": event.get("arrow_label") or f"{code} violated",
+            "what_happened": explanation + also,
+            "how_it_was_done": (f"The DTL evaluated all six authority dimensions "
+                                f"(amount, per-transaction, rail, merchant, purpose, time) "
+                                f"against the grant; the {dimension} check failed."),
+            "why_the_actor_did_it": ("The agent's action was legal on the rail it used and "
+                                     "would have been legal in isolation - it only breaks the "
+                                     "delegation the human actually granted."),
+            "why_it_matters": ("Authority is multidimensional: staying under the money ceiling "
+                               "does not authorise every rail, merchant, basket or moment."),
+            "analogy": "",
+            "team": "BLUE",
+            "source": "deterministic_template",
+        }
 
     tpl = _EVENT_TEMPLATES.get(etype)
     if not tpl:
@@ -1038,3 +1078,65 @@ AGENT_CATALOG = [
      "problem": "Model documentation is a regulatory expectation and always the last thing written.",
      "solves": "Generates an honest model card from real artifacts, and refuses to produce one with no stated weaknesses."},
 ]
+
+
+# =====================================================================
+# SYSTEM HIERARCHY
+# =====================================================================
+#
+# Stated explicitly because the honest framing matters more than the agent
+# count: the INVENTION is the delegation-authority engine. The twelve agents
+# above are an intelligence layer wrapped around it - they make the core idea
+# usable and broader, but not one of them decides an authorization outcome.
+#
+# Presenting twelve agents as twelve independent security innovations would
+# misrepresent the architecture. This structure is what the UI renders instead.
+
+SYSTEM_HIERARCHY = {
+    "invention": {
+        "name": "Delegation-Trust Ledger (DTL)",
+        "claim": "A delegated agent may act only within the authority a human granted, "
+                 "and that authority is multidimensional - amount, per-transaction size, "
+                 "rail, merchant scope, economic purpose and validity window.",
+        "why_novel": "Payment rails each enforce their own local limits. No rail can see the "
+                     "others, and none of them holds the non-monetary dimensions of the grant "
+                     "at all. The DTL is the only component that evaluates the whole grant.",
+        "deterministic": True,
+    },
+    "core": [
+        {"layer": "ATTACK", "component": "Red Agent",
+         "role": "Generates adversarial transactions targeting one authority dimension at a time.",
+         "module": "app/redteam/"},
+        {"layer": "DEFENSE", "component": "DTL Invariant Engine",
+         "role": "Six deterministic invariants, one per authority dimension. No ML, no training data.",
+         "module": "app/dtl/invariant_engine.py"},
+        {"layer": "DEFENSE", "component": "Cost Governor",
+         "role": "Proportionate containment chosen by which dimension failed - never a blanket block.",
+         "module": "app/dtl/cost_governor.py"},
+        {"layer": "DEFENSE", "component": "ML Detector",
+         "role": "Catches behavioural/semantic risk the invariants do not encode. Advisory to the DTL, not a replacement.",
+         "module": "app/detector/"},
+        {"layer": "DEFENSE", "component": "Explainability (SHAP)",
+         "role": "Attributes every model score to specific features.",
+         "module": "app/detector/explainability.py"},
+        {"layer": "DEFENSE", "component": "PQC Audit",
+         "role": "ML-DSA-44 signatures over the hash-chained event log, so the record of what was contained is unforgeable.",
+         "module": "app/crypto/"},
+    ],
+    "intelligence_layer": {
+        "name": "AI agents",
+        "count": len(AGENT_CATALOG),
+        "rule": "Advisory only. The LLM explains, translates and proposes; every proposal is "
+                "schema-validated and re-checked by the deterministic engine before it can "
+                "affect anything.",
+        "lifecycle": [
+            "Intent Compiler turns human instruction into a machine-checkable authority vector",
+            "-> DTL enforces that vector deterministically",
+            "-> Event Explainer / Log Copilot make the enforcement legible",
+            "-> Policy Advisor / Counterfactual Analyst propose changes, simulator judges them",
+            "-> Incident Report / Customer Notice handle the aftermath",
+        ],
+    },
+    "headline": "Delegated authority -> multidimensional attack -> deterministic invariant -> "
+                "ML comparison -> explainable containment.",
+}

@@ -88,6 +88,33 @@ IMPLEMENTED: Dict[int, Dict[str, Any]] = {
         "agentic_relevance": "HIGH",
         "flagship": False,
     },
+    # Attacks on the NON-monetary dimensions of the grant. These exist because
+    # a delegation is not a number: an agent can stay inside the ceiling and
+    # still act outside what the human authorised.
+    53: {
+        "key": "RAIL_SCOPE_VIOLATION",
+        "module": "app.redteam.vectors.authority_scope.RailScopeViolationVector",
+        "defeated_by": "INV_04_UNAUTHORIZED_RAIL",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    54: {
+        "key": "PER_TX_BREACH",
+        "module": "app.redteam.vectors.authority_scope.PerTransactionBreachVector",
+        "defeated_by": "INV_05_PER_TX_CAP_EXCEEDED",
+        "severity": "MEDIUM",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    55: {
+        "key": "LAPSED_MANDATE",
+        "module": "app.redteam.vectors.authority_scope.LapsedMandateVector",
+        "defeated_by": "INV_06_AUTHORITY_EXPIRED",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
 }
 
 _ROW = re.compile(r"^\|\s*\*{0,2}(\d+)\*{0,2}\s*\|(.+)$")

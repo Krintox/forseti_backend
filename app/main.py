@@ -34,6 +34,7 @@ from .paths import (
     ensure_dirs,
 )
 from .ai.routes import register as register_ai_routes
+from .models.state import PaymentRailType
 from .taxonomy import TAXONOMY, taxonomy_summary
 
 app = FastAPI(
@@ -144,6 +145,20 @@ class ResetRequest(BaseModel):
     delegated_limit: Optional[float] = None
 
 
+class AuthorityScopeRequest(BaseModel):
+    """
+    The non-monetary dimensions of a delegation. All optional - an operator
+    typically changes one dimension at a time (e.g. "UPI only") while leaving
+    the ceiling untouched.
+    """
+    global_budget_ceiling: Optional[float] = None
+    permitted_rails: Optional[List[str]] = None
+    per_transaction_cap: Optional[float] = None
+    permitted_mccs: Optional[List[str]] = None
+    validity_window_hours: Optional[float] = None
+    economic_purpose: Optional[str] = None
+
+
 class PQCVerifyRequest(BaseModel):
     snapshot_payload: Dict[str, Any]
     signature_hex: Optional[str] = None
@@ -223,6 +238,30 @@ def get_arena_state() -> Dict[str, Any]:
 def set_limit(req: LimitRequest) -> Dict[str, Any]:
     """Applies an operator-entered delegated ceiling."""
     return orchestrator.set_delegated_limit(req.delegated_limit)
+
+
+@app.post("/api/arena/authority-scope")
+def set_authority_scope(req: AuthorityScopeRequest) -> Dict[str, Any]:
+    """
+    Applies non-monetary dimensions of the delegation - permitted rails,
+    per-transaction cap, MCC scope, validity window, purpose - on top of the
+    live grant. The ceiling alone cannot express "₹12,000, UPI only"; this is
+    the route that lets an operator actually state that.
+    """
+    profile: Dict[str, Any] = req.model_dump(exclude_none=True)
+    if "permitted_rails" in profile:
+        try:
+            profile["permitted_rails"] = [PaymentRailType(r) for r in profile["permitted_rails"]]
+        except ValueError as exc:
+            return {"status": "REJECTED", "reason": f"unknown rail in permitted_rails: {exc}"}
+    return orchestrator.set_authority_scope(profile)
+
+
+@app.get("/api/arena/authority-vector")
+def get_authority_vector() -> Dict[str, Any]:
+    """The full grant, one row per authority dimension - what INV_01..INV_06 each guard."""
+    state = orchestrator.get_state()
+    return {"authority_vector": state["authority_vector"], "invariant_registry": state["invariant_registry"]}
 
 
 @app.post("/api/arena/reset")

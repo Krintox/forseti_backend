@@ -418,12 +418,13 @@ class TestArena:
 
 
 class TestTaxonomy:
-    def test_all_52_vectors_parse(self):
-        assert len(TAXONOMY) == 52
+    def test_all_55_vectors_parse(self):
+        assert len(TAXONOMY) == 55
 
     def test_implemented_vectors_are_marked_separately(self):
         summary = taxonomy_summary()
-        assert summary["implemented_count"] == 6
+        # 6 original + 3 attacking the non-monetary authority dimensions.
+        assert summary["implemented_count"] == 9
         assert summary["research_only_count"] == 46
         for v in TAXONOMY:
             if v["implemented"]:
