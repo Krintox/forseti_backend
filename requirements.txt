@@ -1,0 +1,32 @@
+# Core API
+fastapi>=0.110.0
+uvicorn>=0.28.0
+pydantic>=2.6.0
+websockets>=12.0
+
+# Scientific stack
+numpy>=1.26.0
+pandas>=2.0.0
+scipy>=1.11.0
+scikit-learn>=1.4.0
+matplotlib>=3.8.0
+joblib>=1.3.0
+
+# Gradient boosting: XGBoost is preferred, LightGBM is the fallback.
+# If neither is installed the detector falls back to scikit-learn's
+# HistGradientBoostingClassifier and records that fact in every artifact.
+xgboost>=2.0.0
+lightgbm>=4.0.0
+
+# Genuine SHAP. If absent, attributions are labelled
+# "model_feature_contribution" and are NEVER presented as SHAP.
+shap>=0.44.0
+
+# NIST FIPS 204 ML-DSA-44. dilithium-py is a pure-Python implementation of the
+# standard and needs no native toolchain. liboqs-python may be used instead by
+# setting FORSETI_TRY_LIBOQS=1 (it requires cmake + the liboqs shared library).
+dilithium-py>=1.0.0
+
+# Testing
+pytest>=8.0.0
+requests>=2.31.0
