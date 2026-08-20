@@ -1,0 +1,35 @@
+{
+  "metadata": {
+    "experiment_id": "FIDELITY-EXP-20260818-143549",
+    "timestamp": "2026-08-18T14:35:49.368366+00:00",
+    "seed": 42,
+    "synthetic_samples_generated": 5000,
+    "anchor_datasets_loaded": [],
+    "overall_status": "NOT RUN / DATASET UNAVAILABLE",
+    "claim_statement": "NOT RUN / DATASET UNAVAILABLE. No real-world anchor dataset was present, so NO realism or calibration claim is made. The self-consistency figures below compare synthetic against synthetic and only demonstrate that the statistical pipeline executes end to end.",
+    "how_to_enable": "Place paysim.csv and/or creditcard.csv in data/anchors/ (see scripts/download_anchors.py) and re-run."
+  },
+  "synthetic_internal_consistency": {
+    "what_this_measures": "Synthetic split A vs synthetic split B. A pipeline self-test only. It is NOT evidence of real-world realism.",
+    "internal_ks_statistic": 0.0164,
+    "internal_discriminator_auc": 0.4826
+  },
+  "anchors": {
+    "paysim": {
+      "dataset_name": "PaySim (Mobile Money Anchor, Lopez-Rojas et al.)",
+      "dataset_status": "PaySim CSV not found in data/anchors/paysim.csv",
+      "metrics": {
+        "status": "NOT RUN / DATASET UNAVAILABLE",
+        "reason": "Download paysim.csv to data/anchors/paysim.csv to compute empirical anchor metrics."
+      }
+    },
+    "ulb": {
+      "dataset_name": "ULB creditcard.csv (Card Rail Anchor, Dal Pozzolo et al.)",
+      "dataset_status": "ULB creditcard.csv not found in data/anchors/creditcard.csv",
+      "metrics": {
+        "status": "NOT RUN / DATASET UNAVAILABLE",
+        "reason": "Download creditcard.csv to data/anchors/creditcard.csv to compute empirical anchor metrics."
+      }
+    }
+  }
+}

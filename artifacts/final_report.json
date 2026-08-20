@@ -1,0 +1,76 @@
+{
+  "metadata": {
+    "experiment_id": "FORSETI-EXP-20260818-143531",
+    "timestamp": "2026-08-18T14:35:55.397225+00:00",
+    "seed": 42,
+    "samples": 24000,
+    "git_commit": "NOT A GIT REPOSITORY",
+    "python_version": "3.14.3",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "elapsed_seconds": 24.16
+  },
+  "statuses": {
+    "model_training": "PASS",
+    "baselines": "PASS",
+    "ablation": "PASS",
+    "fidelity": "PASS",
+    "benchmark": "PASS",
+    "pqc_cryptography": "PASS"
+  },
+  "stage_details": {
+    "model_training": {
+      "status": "PASS",
+      "elapsed_seconds": 4.02,
+      "error": null
+    },
+    "baselines": {
+      "status": "PASS",
+      "elapsed_seconds": 6.12,
+      "error": null
+    },
+    "ablation": {
+      "status": "PASS",
+      "elapsed_seconds": 3.35,
+      "error": null
+    },
+    "fidelity": {
+      "status": "PASS",
+      "elapsed_seconds": 4.59,
+      "error": null
+    },
+    "benchmark": {
+      "status": "PASS",
+      "elapsed_seconds": 5.95,
+      "error": null
+    },
+    "pqc_cryptography": {
+      "status": "PASS",
+      "elapsed_seconds": 0.07,
+      "error": null
+    }
+  },
+  "headline": {
+    "model_backend": "xgboost",
+    "test_pr_auc": 0.8882,
+    "test_roc_auc": 0.9825,
+    "explainability_method": "shap.TreeExplainer",
+    "measured_dtl_pr_auc_lift": 0.1378,
+    "cross_rail_recall_holdout": {
+      "rules_only": 0.2568,
+      "per_rail_ml": 0.0,
+      "ml_without_dtl": 0.0,
+      "hybrid_dtl_ml": 0.0,
+      "dtl_invariant_only": 0.9054,
+      "note": "Every learned model scores each transaction in isolation, so a cross-rail leg looks ordinary to it. The deterministic DTL invariant compares AGGREGATE exposure against the delegated ceiling and is therefore holdout-independent: it does not need to have seen the attack family before."
+    },
+    "latency_p99_ms": 0.8791,
+    "latency_sla_verdict": "PASS - measured p99 0.8791 ms < 30.0 ms budget",
+    "pqc_all_tamper_tests_passed": true,
+    "fidelity_status": "PIPELINE OK / ANCHOR DATASETS UNAVAILABLE"
+  },
+  "honesty_notes": [
+    "Every status above reflects an actual execution, not the presence of code.",
+    "Fidelity reports PIPELINE OK / ANCHOR DATASETS UNAVAILABLE when the licensed PaySim/ULB CSVs are absent. No realism claim is made in that case.",
+    "CROSS_RAIL_SPLIT is withheld from training; near-zero ML recall on it is the measured evidence motivating the deterministic DTL invariant."
+  ]
+}

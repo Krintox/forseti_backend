@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "benchmark_id": "BENCH-20260818-143555",
+    "timestamp": "2026-08-18T14:35:55.311319+00:00",
+    "seed": 42,
+    "iterations_measured": 10000,
+    "model_loaded": true,
+    "model_backend": "XGBClassifier",
+    "explainability_in_measured_path": false,
+    "host": {
+      "platform": "Windows-11-10.0.26200-SP0",
+      "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+      "python": "3.14.3"
+    },
+    "inline_sla_budget_ms": 30.0,
+    "sla_note": "Self-imposed inline authorization budget, not a published network requirement.",
+    "sla_p99_met": true,
+    "sla_verdict": "PASS - measured p99 0.8791 ms < 30.0 ms budget"
+  },
+  "breakdown": {
+    "feature_extraction": {
+      "p50_ms": 0.0311,
+      "p95_ms": 0.0451,
+      "p99_ms": 0.0558,
+      "mean_ms": 0.0327,
+      "min_ms": 0.027,
+      "max_ms": 0.181,
+      "n": 10000
+    },
+    "dtl_invariant_evaluation": {
+      "p50_ms": 0.004,
+      "p95_ms": 0.0053,
+      "p99_ms": 0.0066,
+      "mean_ms": 0.0042,
+      "min_ms": 0.0034,
+      "max_ms": 0.0411,
+      "n": 10000
+    },
+    "ml_inference": {
+      "p50_ms": 0.49,
+      "p95_ms": 0.6337,
+      "p99_ms": 0.8295,
+      "mean_ms": 0.5187,
+      "min_ms": 0.4372,
+      "max_ms": 44.5455,
+      "n": 10000
+    },
+    "full_end_to_end_pipeline": {
+      "p50_ms": 0.5259,
+      "p95_ms": 0.6803,
+      "p99_ms": 0.8791,
+      "mean_ms": 0.556,
+      "min_ms": 0.469,
+      "max_ms": 44.5811,
+      "n": 10000
+    }
+  }
+}

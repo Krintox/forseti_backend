@@ -1,0 +1,254 @@
+{
+  "metadata": {
+    "experiment_id": "ABLATION-20260818-143543",
+    "timestamp": "2026-08-18T14:35:43.152089+00:00",
+    "seed": 42,
+    "model_backend": {
+      "backend": "xgboost",
+      "backend_version": "3.4.1",
+      "architecture": "XGBoost XGBClassifier (gradient-boosted decision trees)",
+      "is_preferred_backend": true
+    },
+    "attack_families_held_out": [
+      "CROSS_RAIL_SPLIT",
+      "REVOCATION_FLOOD"
+    ],
+    "sample_counts": {
+      "train": 16356,
+      "test": 3600
+    },
+    "note": "Every variant is retrained from scratch on the identical temporal split."
+  },
+  "variants": {
+    "A_all_features": {
+      "pr_auc": 0.8926,
+      "roc_auc": 0.9815,
+      "precision": 1.0,
+      "recall": 0.6904,
+      "f1_score": 0.8168,
+      "recall_at_0.5pct_fpr": 0.6904,
+      "precision_at_100": 1.0,
+      "false_positive_rate": 0.0,
+      "confusion_matrix": {
+        "tn": 3361,
+        "fp": 0,
+        "fn": 74,
+        "tp": 165
+      },
+      "financial_impact": {
+        "fraud_value_caught_inr": 349956.57,
+        "legitimate_value_blocked_inr": 0.0,
+        "fraud_value_missed_inr": 154356.27,
+        "net_value_saved_inr": 349956.57
+      },
+      "threshold": 0.5,
+      "n_samples": 3600,
+      "n_positives": 239,
+      "variant_name": "A: all features",
+      "feature_count": 29,
+      "features_removed": []
+    },
+    "B_no_dtl": {
+      "pr_auc": 0.7548,
+      "roc_auc": 0.883,
+      "precision": 1.0,
+      "recall": 0.6904,
+      "f1_score": 0.8168,
+      "recall_at_0.5pct_fpr": 0.6904,
+      "precision_at_100": 1.0,
+      "false_positive_rate": 0.0,
+      "confusion_matrix": {
+        "tn": 3361,
+        "fp": 0,
+        "fn": 74,
+        "tp": 165
+      },
+      "financial_impact": {
+        "fraud_value_caught_inr": 349956.57,
+        "legitimate_value_blocked_inr": 0.0,
+        "fraud_value_missed_inr": 154356.27,
+        "net_value_saved_inr": 349956.57
+      },
+      "threshold": 0.5,
+      "n_samples": 3600,
+      "n_positives": 239,
+      "variant_name": "B: remove DTL (delegation + cross-rail)",
+      "feature_count": 17,
+      "features_removed": [
+        "granted_limit",
+        "remaining_headroom",
+        "authority_utilization_ratio",
+        "delegation_ttl_remaining_pct",
+        "delegation_fanout_count",
+        "active_subagents_count",
+        "total_exposure_global",
+        "pending_spend_global",
+        "cross_rail_velocity",
+        "num_rails_used_24h",
+        "exposure_after_tx_ratio",
+        "amount_deviation_from_rail_mean"
+      ]
+    },
+    "C_no_semantic": {
+      "pr_auc": 0.976,
+      "roc_auc": 0.987,
+      "precision": 1.0,
+      "recall": 0.9582,
+      "f1_score": 0.9786,
+      "recall_at_0.5pct_fpr": 0.9707,
+      "precision_at_100": 1.0,
+      "false_positive_rate": 0.0,
+      "confusion_matrix": {
+        "tn": 3361,
+        "fp": 0,
+        "fn": 10,
+        "tp": 229
+      },
+      "financial_impact": {
+        "fraud_value_caught_inr": 482601.58,
+        "legitimate_value_blocked_inr": 0.0,
+        "fraud_value_missed_inr": 21711.26,
+        "net_value_saved_inr": 482601.58
+      },
+      "threshold": 0.5,
+      "n_samples": 3600,
+      "n_positives": 239,
+      "variant_name": "C: remove semantic",
+      "feature_count": 24,
+      "features_removed": [
+        "semantic_drift_score",
+        "stored_value_item_count",
+        "stored_value_value_ratio",
+        "merchant_category_match_bool",
+        "cart_intent_consistency_score"
+      ]
+    },
+    "D_no_cross_rail": {
+      "pr_auc": 0.8836,
+      "roc_auc": 0.9802,
+      "precision": 1.0,
+      "recall": 0.6904,
+      "f1_score": 0.8168,
+      "recall_at_0.5pct_fpr": 0.6904,
+      "precision_at_100": 1.0,
+      "false_positive_rate": 0.0,
+      "confusion_matrix": {
+        "tn": 3361,
+        "fp": 0,
+        "fn": 74,
+        "tp": 165
+      },
+      "financial_impact": {
+        "fraud_value_caught_inr": 349956.57,
+        "legitimate_value_blocked_inr": 0.0,
+        "fraud_value_missed_inr": 154356.27,
+        "net_value_saved_inr": 349956.57
+      },
+      "threshold": 0.5,
+      "n_samples": 3600,
+      "n_positives": 239,
+      "variant_name": "D: remove cross-rail",
+      "feature_count": 23,
+      "features_removed": [
+        "total_exposure_global",
+        "pending_spend_global",
+        "cross_rail_velocity",
+        "num_rails_used_24h",
+        "exposure_after_tx_ratio",
+        "amount_deviation_from_rail_mean"
+      ]
+    },
+    "E_no_delegation": {
+      "pr_auc": 0.913,
+      "roc_auc": 0.9834,
+      "precision": 1.0,
+      "recall": 0.6904,
+      "f1_score": 0.8168,
+      "recall_at_0.5pct_fpr": 0.6904,
+      "precision_at_100": 1.0,
+      "false_positive_rate": 0.0,
+      "confusion_matrix": {
+        "tn": 3361,
+        "fp": 0,
+        "fn": 74,
+        "tp": 165
+      },
+      "financial_impact": {
+        "fraud_value_caught_inr": 349956.57,
+        "legitimate_value_blocked_inr": 0.0,
+        "fraud_value_missed_inr": 154356.27,
+        "net_value_saved_inr": 349956.57
+      },
+      "threshold": 0.5,
+      "n_samples": 3600,
+      "n_positives": 239,
+      "variant_name": "E: remove delegation",
+      "feature_count": 23,
+      "features_removed": [
+        "granted_limit",
+        "remaining_headroom",
+        "authority_utilization_ratio",
+        "delegation_ttl_remaining_pct",
+        "delegation_fanout_count",
+        "active_subagents_count"
+      ]
+    },
+    "F_raw_only": {
+      "pr_auc": 0.7304,
+      "roc_auc": 0.8225,
+      "precision": 0.9702,
+      "recall": 0.682,
+      "f1_score": 0.801,
+      "recall_at_0.5pct_fpr": 0.682,
+      "precision_at_100": 1.0,
+      "false_positive_rate": 0.00149,
+      "confusion_matrix": {
+        "tn": 3356,
+        "fp": 5,
+        "fn": 76,
+        "tp": 163
+      },
+      "financial_impact": {
+        "fraud_value_caught_inr": 342553.0,
+        "legitimate_value_blocked_inr": 34308.87,
+        "fraud_value_missed_inr": 161759.84,
+        "net_value_saved_inr": 308244.13
+      },
+      "threshold": 0.5,
+      "n_samples": 3600,
+      "n_positives": 239,
+      "variant_name": "F: raw transaction features only",
+      "feature_count": 8,
+      "features_removed": [
+        "granted_limit",
+        "remaining_headroom",
+        "authority_utilization_ratio",
+        "delegation_ttl_remaining_pct",
+        "delegation_fanout_count",
+        "active_subagents_count",
+        "total_exposure_global",
+        "pending_spend_global",
+        "cross_rail_velocity",
+        "num_rails_used_24h",
+        "exposure_after_tx_ratio",
+        "amount_deviation_from_rail_mean",
+        "semantic_drift_score",
+        "stored_value_item_count",
+        "stored_value_value_ratio",
+        "merchant_category_match_bool",
+        "cart_intent_consistency_score",
+        "revocation_rate_1h",
+        "regrant_frequency",
+        "velocity_spike_indicator",
+        "mcc_entropy"
+      ]
+    }
+  },
+  "measured_dtl_feature_lift": {
+    "definition": "PR-AUC(A: all features) - PR-AUC(B: DTL feature groups removed)",
+    "pr_auc_all_features": 0.8926,
+    "pr_auc_without_dtl": 0.7548,
+    "lift": 0.1378,
+    "relative_lift_pct": 18.26
+  }
+}

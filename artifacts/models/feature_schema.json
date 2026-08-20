@@ -1,0 +1,77 @@
+{
+  "version": "2.1.0",
+  "feature_count": 29,
+  "feature_names": [
+    "amount",
+    "rail_code",
+    "merchant_mcc_code",
+    "hour_of_day",
+    "day_of_week",
+    "retry_count",
+    "tx_velocity_1h",
+    "merchant_risk_score",
+    "granted_limit",
+    "remaining_headroom",
+    "authority_utilization_ratio",
+    "delegation_ttl_remaining_pct",
+    "delegation_fanout_count",
+    "active_subagents_count",
+    "total_exposure_global",
+    "pending_spend_global",
+    "cross_rail_velocity",
+    "num_rails_used_24h",
+    "exposure_after_tx_ratio",
+    "amount_deviation_from_rail_mean",
+    "semantic_drift_score",
+    "stored_value_item_count",
+    "stored_value_value_ratio",
+    "merchant_category_match_bool",
+    "cart_intent_consistency_score",
+    "revocation_rate_1h",
+    "regrant_frequency",
+    "velocity_spike_indicator",
+    "mcc_entropy"
+  ],
+  "feature_groups": {
+    "raw_transaction": [
+      "amount",
+      "rail_code",
+      "merchant_mcc_code",
+      "hour_of_day",
+      "day_of_week",
+      "retry_count",
+      "tx_velocity_1h",
+      "merchant_risk_score"
+    ],
+    "delegation": [
+      "granted_limit",
+      "remaining_headroom",
+      "authority_utilization_ratio",
+      "delegation_ttl_remaining_pct",
+      "delegation_fanout_count",
+      "active_subagents_count"
+    ],
+    "cross_rail": [
+      "total_exposure_global",
+      "pending_spend_global",
+      "cross_rail_velocity",
+      "num_rails_used_24h",
+      "exposure_after_tx_ratio",
+      "amount_deviation_from_rail_mean"
+    ],
+    "semantic": [
+      "semantic_drift_score",
+      "stored_value_item_count",
+      "stored_value_value_ratio",
+      "merchant_category_match_bool",
+      "cart_intent_consistency_score"
+    ],
+    "security": [
+      "revocation_rate_1h",
+      "regrant_frequency",
+      "velocity_spike_indicator",
+      "mcc_entropy"
+    ]
+  },
+  "description": "Unified 5-Group Feature Schema for FORSETI Hybrid ML Detector."
+}

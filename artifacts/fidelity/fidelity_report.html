@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FORSETI Statistical Fidelity Validation Report</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #0f172a; padding: 24px; }
+        .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        h1, h2, h3 { color: #0f172a; }
+        .stat { font-family: monospace; font-size: 1.25rem; font-weight: bold; color: #2563eb; }
+        .badge { background: #eff6ff; color: #1d4ed8; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>FORSETI Statistical Fidelity & Realism Validation Report</h1>
+    <p>Experiment ID: <code>FIDELITY-EXP-20260818-143549</code> | Generated: 2026-08-18T14:35:49.368366+00:00</p>
+    <p><em>NOT RUN / DATASET UNAVAILABLE. No real-world anchor dataset was present, so NO realism or calibration claim is made. The self-consistency figures below compare synthetic against synthetic and only demonstrate that the statistical pipeline executes end to end.</em></p>
+    
+    <div class="card">
+        <h2>Synthetic Self-Consistency Validation</h2>
+        <p>Internal KS Statistic: <span class="stat">0.0164</span></p>
+        <p>Internal Discriminator AUC: <span class="stat">0.4826</span></p>
+    </div>
+
+    <div class="card">
+        <h2>PaySim Anchor (Lopez-Rojas et al.)</h2>
+        <p>Status: <span class="badge">PaySim CSV not found in data/anchors/paysim.csv</span></p>
+        <pre>{
+  "status": "NOT RUN / DATASET UNAVAILABLE",
+  "reason": "Download paysim.csv to data/anchors/paysim.csv to compute empirical anchor metrics."
+}</pre>
+    </div>
+
+    <div class="card">
+        <h2>ULB Credit Card Anchor (Dal Pozzolo et al.)</h2>
+        <p>Status: <span class="badge">ULB creditcard.csv not found in data/anchors/creditcard.csv</span></p>
+        <pre>{
+  "status": "NOT RUN / DATASET UNAVAILABLE",
+  "reason": "Download creditcard.csv to data/anchors/creditcard.csv to compute empirical anchor metrics."
+}</pre>
+    </div>
+</body>
+</html>
