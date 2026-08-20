@@ -214,25 +214,28 @@ def register(app, orchestrator) -> None:
             return proposal
 
         strategy = last.get("strategy", "CROSS_RAIL_SPLIT")
-        original_ceiling = orchestrator.configured_ceiling
+
+        # Each hypothetical runs in an isolated sandbox orchestrator. Running
+        # them against the live one would reset the authority between ceilings,
+        # wiping the operator's rail scope, per-transaction cap, event log and
+        # last_round - which then broke every other incident-driven agent.
+        # A what-if must be observation-only.
         runs = []
-        try:
-            for param in proposal["result"]["parameters_to_test"][:4]:
-                ceiling = float(param["ceiling_inr"])
-                orchestrator.reset(ceiling)
-                result = await orchestrator.run_round_stream(
-                    round_number=2, dtl_enabled=True, event_callback=None,
-                    speed=100.0, strategy_override=strategy)
-                runs.append({
-                    "label": param.get("label", ""),
-                    "ceiling_inr": ceiling,
-                    "contained": result["detected"],
-                    "winner": result["winner"],
-                    "final_exposure_inr": result["authority_state"]["total_exposure_global"],
-                    "breached": result["authority_state"]["total_exposure_global"] > ceiling,
-                })
-        finally:
-            orchestrator.reset(original_ceiling)
+        for param in proposal["result"]["parameters_to_test"][:4]:
+            ceiling = float(param["ceiling_inr"])
+            sandbox = orchestrator.sandbox()
+            sandbox.reset(ceiling)
+            result = await sandbox.run_round_stream(
+                round_number=2, dtl_enabled=True, event_callback=None,
+                speed=100.0, strategy_override=strategy)
+            runs.append({
+                "label": param.get("label", ""),
+                "ceiling_inr": ceiling,
+                "contained": result["detected"],
+                "winner": result["winner"],
+                "final_exposure_inr": result["authority_state"]["total_exposure_global"],
+                "breached": result["authority_state"]["total_exposure_global"] > ceiling,
+            })
 
         proposal["simulated_outcomes"] = runs
         proposal["answer"] = _counterfactual_answer(runs)

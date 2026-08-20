@@ -68,6 +68,34 @@ STRATEGY_PROFILE: Dict[str, Dict[str, Any]] = {
         "target_rails": ["UPI_CIRCLE"],
         "base_prior": 0.60,
     },
+    # Attacks on the NON-monetary dimensions of the grant. These stay fully
+    # inside the aggregate ceiling, so headroom is irrelevant to whether they
+    # can even be attempted - only to whether the legitimate leg alongside
+    # them clears.
+    "RAIL_SCOPE_VIOLATION": {
+        "round": 7,
+        "needs_headroom": False,
+        "exploits": "Rail selection is itself part of the grant, but no rail adapter knows the delegation excluded it.",
+        "defeated_by": "INV_04_UNAUTHORIZED_RAIL",
+        "target_rails": ["UPI_CIRCLE", "CARD_TOKEN"],
+        "base_prior": 0.88,
+    },
+    "PER_TX_BREACH": {
+        "round": 8,
+        "needs_headroom": True,
+        "exploits": "The aggregate ceiling can be untouched while one transaction alone exceeds the per-action bound.",
+        "defeated_by": "INV_05_PER_TX_CAP_EXCEEDED",
+        "target_rails": ["UPI_CIRCLE", "CARD_TOKEN", "AGENTIC_AP2"],
+        "base_prior": 0.70,
+    },
+    "LAPSED_MANDATE": {
+        "round": 9,
+        "needs_headroom": False,
+        "exploits": "Token expiry and delegation expiry are different clocks; a still-valid token can outlive the authority behind it.",
+        "defeated_by": "INV_06_AUTHORITY_EXPIRED",
+        "target_rails": ["UPI_CIRCLE"],
+        "base_prior": 0.78,
+    },
 }
 
 

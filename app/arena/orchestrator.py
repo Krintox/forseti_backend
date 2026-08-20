@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -27,8 +28,9 @@ from ..dtl.cost_governor import AdversarialCostGovernor
 from ..dtl.invariant_engine import DTLInvariantEngine
 from ..dtl.ledger import DTLLedger
 from ..feedback.feedback_engine import ClosedLoopFeedbackEngine
-from ..models.state import DefensePolicy, PaymentRailType
+from ..models.state import DefensePolicy, DTLGlobalAuthorityState, PaymentRailType
 from ..models.transactions import SyntheticTransaction
+from ..paths import EVENTS_DIR
 from ..redteam.vectors.authority_scope import (
     LapsedMandateVector,
     PerTransactionBreachVector,
@@ -46,6 +48,10 @@ from ..simulator.state_machine import PaymentSimulatorEngine
 from .events import RAIL_TO_ACTOR, Actor, ArenaEvent, EventRecorder, EventType
 
 AUTHORITY_ID = "auth_household_grocery_2026"
+
+# Hypothetical (counterfactual) rounds are persisted here rather than in the
+# main events directory, so they never pollute the replayable round list.
+SANDBOX_EVENTS_DIR = os.path.join(EVENTS_DIR, "_sandbox")
 
 STRATEGY_BY_ROUND = {
     1: "INTENT_LAUNDERING",
@@ -119,12 +125,91 @@ class ArenaBattleOrchestrator:
         self.configured_ceiling = 10000.0
         # Retained so the AI agents can reason over the most recent incident.
         self.last_round: Optional[Dict[str, Any]] = None
+        # The grant the OPERATOR configured, as distinct from one a vector
+        # profile temporarily imposes. See _apply_operator_grant.
+        self.operator_grant: Dict[str, Any] = {"global_budget_ceiling": 10000.0}
+
+    # Dimensions a vector's authority_profile is allowed to override for the
+    # duration of its own round.
+    _SCOPE_FIELDS = (
+        "permitted_rails", "per_transaction_cap", "validity_window_hours",
+        "permitted_mccs", "economic_purpose", "semantic_exclusions",
+    )
+
+    @classmethod
+    def _default_scope(cls) -> Dict[str, Any]:
+        """The model's own field defaults, read from a throwaway instance."""
+        blank = DTLGlobalAuthorityState(authority_id="_", principal="_", agent_id="_")
+        return {f: getattr(blank, f) for f in cls._SCOPE_FIELDS}
+
+    def _apply_operator_grant(self) -> Any:
+        """
+        Restores the operator's grant before a round that brings no profile of
+        its own.
+
+        Vectors like RAIL_SCOPE_VIOLATION and PER_TX_BREACH re-grant the
+        authority to demonstrate their dimension ("UPI only", "max ₹3,000 per
+        transaction"). Without restoring afterwards, that profile stayed in
+        force for every later round: running the full campaign reported
+        INV_05_PER_TX_CAP_EXCEEDED for Intent Laundering and Scope Creep
+        instead of the semantic-drift and MCC invariants those vectors exist to
+        demonstrate. Exposure is deliberately preserved so a multi-vector
+        campaign still depletes one shared headroom.
+        """
+        grant = self._default_scope()
+        grant.update(self.operator_grant)
+        # allow_none: a full restore must be able to CLEAR an optional
+        # dimension (per_transaction_cap back to unconstrained), not just
+        # overwrite non-null ones.
+        self.ledger.update_authority_scope(AUTHORITY_ID, grant, allow_none=True)
+        auth = self.ledger.get_authority(AUTHORITY_ID)
+        self.configured_ceiling = auth.global_budget_ceiling
+        return auth
+
+    def sandbox(self) -> "ArenaBattleOrchestrator":
+        """
+        An isolated clone for hypothetical runs (counterfactual "what if the
+        limit had been X?" analysis).
+
+        A what-if must never disturb what the operator is actually looking at.
+        Running counterfactuals against the LIVE orchestrator previously reset
+        the authority between each simulated ceiling, which silently wiped the
+        operator's rail scope and per-transaction cap, erased the whole event
+        log, and cleared `last_round` - so Incident Report, Policy Advisor and
+        Customer Notice all started answering "no round has been executed yet"
+        immediately after a counterfactual was run.
+
+        The detector and PQC keys are shared deliberately: they are stateless
+        at inference/signing time, and re-loading the model per what-if would
+        cost seconds each. Everything that carries mutable round state -
+        ledger, simulator, feedback memory, event recorder - is fresh.
+        """
+        clone = ArenaBattleOrchestrator.__new__(ArenaBattleOrchestrator)
+        clone.simulator = PaymentSimulatorEngine()
+        clone.ledger = DTLLedger()
+        clone.invariant_engine = DTLInvariantEngine()
+        clone.cost_governor = AdversarialCostGovernor()
+        clone.detector = self.detector            # stateless scoring
+        clone.pqc_module = self.pqc_module        # stateless signing
+        clone.feedback_engine = ClosedLoopFeedbackEngine()
+        # Hypothetical rounds are written to a sandbox directory so they never
+        # appear in the operator's "Recorded rounds" replay list. The listing
+        # only picks up *.jsonl files, so a subdirectory is ignored by design.
+        clone.recorder = EventRecorder(persist_dir=SANDBOX_EVENTS_DIR)
+        clone.speed = 100.0
+        clone.is_running = False
+        clone.configured_ceiling = self.configured_ceiling
+        clone.last_round = None
+        return clone
 
     # ------------------------------------------------------------- state
 
     def reset(self, budget: Optional[float] = None) -> Dict[str, Any]:
         ceiling = float(budget) if budget is not None else self.configured_ceiling
         self.configured_ceiling = ceiling
+        # A reset re-establishes the operator's baseline grant: default scope
+        # on every non-monetary dimension, at the requested ceiling.
+        self.operator_grant = {"global_budget_ceiling": ceiling}
         self.ledger.reset_authority(AUTHORITY_ID, budget=ceiling)
         self.simulator.reset_all_rails()
         self.feedback_engine.reset()
@@ -141,6 +226,7 @@ class ArenaBattleOrchestrator:
         amount = max(0.0, float(amount))
         auth = self.ledger.get_authority(AUTHORITY_ID)
         self.configured_ceiling = amount
+        self.operator_grant["global_budget_ceiling"] = amount
         auth.global_budget_ceiling = amount
         auth.last_updated_at = datetime.now(timezone.utc)
         return self.get_state()
@@ -153,6 +239,11 @@ class ArenaBattleOrchestrator:
         UPI only" instead of only ever changing the ceiling.
         """
         auth = self.ledger.update_authority_scope(AUTHORITY_ID, profile)
+        # Remember it as the operator's baseline, so a vector profile applied
+        # by a later round is reverted back to THIS, not to bare defaults.
+        for key, value in profile.items():
+            if key in self._SCOPE_FIELDS or key == "global_budget_ceiling":
+                self.operator_grant[key] = value
         if auth is not None and "global_budget_ceiling" in profile:
             self.configured_ceiling = auth.global_budget_ceiling
         return self.get_state()
@@ -189,24 +280,35 @@ class ArenaBattleOrchestrator:
 
     # ------------------------------------------------------------ helpers
 
+    # Some vectors model a single transaction, others a burst of them, so their
+    # generators return either one SyntheticTransaction or a list. Normalising
+    # here (rather than at each call site) is what keeps that difference from
+    # mattering: hand-wrapping a list-returning generator in another list
+    # produced [[tx, tx, ...]], and the round then crashed on `t.amount` with
+    # "'list' object has no attribute 'amount'". BASELINE_POISONING,
+    # REVOCATION_FLOOD and VELOCITY_BURST were all unreachable that way.
+    _VECTORS = {
+        "CROSS_RAIL_SPLIT": CrossRailSplitVector,
+        "INTENT_LAUNDERING": IntentLaunderingVector,
+        "RAIL_SCOPE_VIOLATION": RailScopeViolationVector,
+        "PER_TX_BREACH": PerTransactionBreachVector,
+        "LAPSED_MANDATE": LapsedMandateVector,
+        "BASELINE_POISONING": BaselinePoisoningVector,
+        "REVOCATION_FLOOD": RevocationFloodVector,
+        "VELOCITY_BURST": VelocitySpikeVector,
+        "SCOPE_CREEP": ScopeCreepVector,
+    }
+
     def _select_attack(self, strategy: str) -> List[SyntheticTransaction]:
-        if strategy == "CROSS_RAIL_SPLIT":
-            return CrossRailSplitVector.generate_attack(AUTHORITY_ID)
-        if strategy == "INTENT_LAUNDERING":
-            return [IntentLaunderingVector.generate_attack(AUTHORITY_ID)]
-        if strategy == "RAIL_SCOPE_VIOLATION":
-            return RailScopeViolationVector.generate_attack(AUTHORITY_ID)
-        if strategy == "PER_TX_BREACH":
-            return PerTransactionBreachVector.generate_attack(AUTHORITY_ID)
-        if strategy == "LAPSED_MANDATE":
-            return LapsedMandateVector.generate_attack(AUTHORITY_ID)
-        if strategy == "BASELINE_POISONING":
-            return [BaselinePoisoningVector.generate_attack(AUTHORITY_ID)]
-        if strategy == "REVOCATION_FLOOD":
-            return [RevocationFloodVector.generate_attack(AUTHORITY_ID)]
-        if strategy == "VELOCITY_BURST":
-            return [VelocitySpikeVector.generate_attack(AUTHORITY_ID)]
-        return [ScopeCreepVector.generate_attack(AUTHORITY_ID)]
+        vector = self._VECTORS.get(strategy, ScopeCreepVector)
+        produced = vector.generate_attack(AUTHORITY_ID)
+        txs = list(produced) if isinstance(produced, (list, tuple)) else [produced]
+        if not txs or not all(isinstance(t, SyntheticTransaction) for t in txs):
+            raise TypeError(
+                f"{vector.__name__}.generate_attack must yield SyntheticTransaction(s); "
+                f"got {type(produced).__name__}"
+            )
+        return txs
 
     @staticmethod
     def _rail_name(tx: SyntheticTransaction) -> str:
@@ -256,6 +358,10 @@ class ArenaBattleOrchestrator:
                 profile=profile,
             )
             self.configured_ceiling = auth.global_budget_ceiling
+        else:
+            # No profile of its own: run against the operator's grant, undoing
+            # any scope a previous vector temporarily imposed.
+            auth = self._apply_operator_grant()
 
         attacks = self._select_attack(strategy)
         total_objective = sum(t.amount for t in attacks)

@@ -282,6 +282,66 @@ class TestPQC:
         sig[7] ^= 0x01
         assert MLDSA44Provider.verify(b"msg", bytes(sig), pk) is False
 
+    def test_canonical_bytes_are_stable_across_a_browser_json_roundtrip(self):
+        """
+        RFC 8785 defines canonical number formatting to match ECMAScript's
+        Number-to-String rules: an integral value never prints a trailing
+        ".0". Python's json.dumps does not follow that rule on its own, so a
+        payload signed as {"x": 10000.0} previously produced different
+        canonical bytes than the same payload after round-tripping through a
+        browser's JSON.parse/JSON.stringify (which collapses 10000.0 to
+        10000) - making a completely untampered snapshot fail live
+        re-verification the moment any field held a whole-number float.
+        """
+        payload = {"global_budget_ceiling": 10000.0, "total_exposure": 0.0, "note": "x"}
+        python_bytes = CanonicalSerializer.canonical_bytes(payload)
+
+        # Simulates exactly what a browser does to a whole-number float.
+        browser_roundtripped = {"global_budget_ceiling": 10000, "total_exposure": 0, "note": "x"}
+        browser_bytes = CanonicalSerializer.canonical_bytes(browser_roundtripped)
+
+        assert python_bytes == browser_bytes
+        assert b"10000.0" not in python_bytes, "canonical form must not depend on Python's float repr"
+
+    def test_signed_snapshot_survives_a_browser_json_roundtrip(self):
+        """End-to-end: sign with Python-typed floats, verify with the same
+        payload after simulating JS's int/float collapse - must still pass."""
+        if not MLDSA44Provider.AVAILABLE:
+            pytest.skip(MLDSA44Provider.UNAVAILABLE_REASON or "PQC unavailable")
+        module = PQCDelegationAuditModule()
+        auth_state = {
+            "authority_id": "auth_test", "principal": "user_test",
+            "global_budget_ceiling": 10000.0, "total_exposure_global": 0.0,
+            "active_policy": "STANDARD",
+        }
+        signed = module.create_signed_snapshot(auth_state)
+        assert signed["verification_status"] == "ML-DSA-44 VERIFIED"
+
+        js_like_payload = dict(signed["snapshot_payload"])
+        js_like_payload["global_budget_ceiling"] = int(js_like_payload["global_budget_ceiling"])
+        js_like_payload["total_exposure"] = int(js_like_payload["total_exposure"])
+
+        assert module.verify_snapshot(js_like_payload, signed["signature_hex"]) is True
+
+    def test_active_policy_is_not_the_python_enum_repr(self):
+        """
+        A live DefensePolicy Enum member passed straight into build_snapshot_payload
+        must contribute its .value ("STANDARD"), never str(member)
+        ("DefensePolicy.STANDARD") - the same leaked-repr bug fixed elsewhere
+        in the app via a `_policy_name()` sanitizer, which this code path had
+        not been given.
+        """
+        from app.models.state import DefensePolicy
+
+        module = PQCDelegationAuditModule()
+        payload = module.build_snapshot_payload({
+            "authority_id": "a", "principal": "p",
+            "global_budget_ceiling": 1000.0, "total_exposure_global": 0.0,
+            "active_policy": DefensePolicy.STRICT_INVARIANT,
+        })
+        assert payload["active_policy"] == "STRICT_INVARIANT"
+        assert "DefensePolicy." not in payload["active_policy"]
+
     def test_wrong_key_fails_verification(self):
         if not MLDSA44Provider.AVAILABLE:
             pytest.skip("PQC unavailable")

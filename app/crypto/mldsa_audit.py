@@ -44,12 +44,20 @@ class PQCDelegationAuditModule:
             total_exp = authority_state.get("total_exposure", 0.0)
         total_exp = float(total_exp or 0.0)
 
+        # .get("value", ...) unwraps a real Enum member; a plain string already
+        # has no such attribute and passes through. `str()` alone previously
+        # rendered a live DefensePolicy member as "DefensePolicy.STANDARD" -
+        # the Python repr, not its value - which then got signed, hashed and
+        # displayed verbatim in the audit UI.
+        policy = authority_state.get("active_policy", "STANDARD")
+        policy_name = str(getattr(policy, "value", policy))
+
         return {
             "authority_id": authority_state.get("authority_id", "auth_default"),
             "principal": authority_state.get("principal", "user@forseti.ai"),
             "global_budget_ceiling": float(authority_state.get("global_budget_ceiling", 10000.0)),
             "total_exposure": round(total_exp, 2),
-            "active_policy": str(authority_state.get("active_policy", "STANDARD")),
+            "active_policy": policy_name,
             "event_root": event_root,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }

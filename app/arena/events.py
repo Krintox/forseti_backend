@@ -204,23 +204,40 @@ class EventRecorder:
         return out
 
     @staticmethod
-    def list_recordings(persist_dir: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_recordings(persist_dir: Optional[str] = None,
+                        limit: int = 40) -> List[Dict[str, Any]]:
+        """
+        The most recent recordings, newest first.
+
+        The limit is applied to the FILE LIST before any file is opened. Every
+        entry needs a line count, so listing without a bound meant re-reading
+        every recording ever made on each request - hundreds of files after a
+        few sessions, for a panel that only ever shows the newest handful.
+        Experiment ids are timestamp-ordered, so a reverse name sort is already
+        newest-first and the slice is safe to take up front.
+        """
         if persist_dir is None:
             from ..paths import EVENTS_DIR
 
             persist_dir = EVENTS_DIR
         if not os.path.isdir(persist_dir):
             return []
+        names = sorted(
+            (n for n in os.listdir(persist_dir) if n.endswith(".jsonl")),
+            reverse=True,
+        )
+        if limit > 0:
+            names = names[:limit]
         rows = []
-        for name in sorted(os.listdir(persist_dir), reverse=True):
-            if not name.endswith(".jsonl"):
-                continue
+        for name in names:
             full = os.path.join(persist_dir, name)
             try:
+                with open(full, encoding="utf-8") as fh:
+                    event_count = sum(1 for _ in fh)
                 rows.append({
                     "experiment_id": name[:-6],
                     "path": full,
-                    "event_count": sum(1 for _ in open(full, encoding="utf-8")),
+                    "event_count": event_count,
                     "modified": datetime.fromtimestamp(os.path.getmtime(full), timezone.utc).isoformat(),
                 })
             except Exception:

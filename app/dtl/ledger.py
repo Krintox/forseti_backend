@@ -81,17 +81,25 @@ class DTLLedger:
         return self.authorities[authority_id]
 
     def update_authority_scope(self, authority_id: str,
-                               profile: Dict[str, Any]) -> Optional[DTLGlobalAuthorityState]:
+                               profile: Dict[str, Any],
+                               allow_none: bool = False) -> Optional[DTLGlobalAuthorityState]:
         """
         Applies dimension changes to a LIVE grant, preserving exposure already
         booked so an operator can watch headroom and scope tighten in real time.
+
+        By default a None value means "leave this dimension alone", so a partial
+        update (e.g. only permitted_rails) cannot silently wipe the others.
+        `allow_none=True` instead treats None as an explicit value, which is the
+        only way to CLEAR an optional dimension - restoring per_transaction_cap
+        to "unconstrained" was otherwise impossible, so a cap imposed by one
+        attack vector's profile stayed in force for every later round.
         """
         auth = self.get_authority(authority_id)
         if auth is None:
             return None
         allowed = set(DTLGlobalAuthorityState.model_fields.keys())
         for key, value in profile.items():
-            if key in allowed and value is not None:
+            if key in allowed and (allow_none or value is not None):
                 setattr(auth, key, value)
         auth.last_updated_at = datetime.utcnow()
         return auth

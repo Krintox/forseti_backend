@@ -213,3 +213,217 @@ class TestAuthorityVector:
         vector = ledger.get_authority(AUTHORITY_ID).authority_vector()
         assert vector["RAIL"]["granted"] == ["UPI_CIRCLE"]
         assert vector["RAIL"]["unconstrained"] is False
+
+
+class TestRedAgentKnowsAllVectors:
+    """
+    The closed-loop Red agent picks its next move by argmax over
+    feedback.adaptive_planner.STRATEGY_PROFILE. If a strategy is missing from
+    that table it can never be recommended by the adaptation engine, even
+    though the orchestrator can run it - exactly the gap that let three
+    authority-dimension vectors (rail, per-tx, time) ship without the "closed
+    loop" ever being able to choose them.
+    """
+
+    def test_every_orchestrator_strategy_has_a_planner_profile(self):
+        from app.arena.orchestrator import STRATEGY_BY_ROUND
+        from app.feedback.adaptive_planner import STRATEGY_PROFILE
+
+        for strategy in STRATEGY_BY_ROUND.values():
+            assert strategy in STRATEGY_PROFILE, (
+                f"{strategy} is runnable via the orchestrator but the adaptive "
+                f"planner can never select it as a next move"
+            )
+
+    def test_new_dimension_vectors_are_scoreable(self):
+        from app.feedback.adaptive_planner import AdaptiveRedPlanner
+        from app.feedback.attack_memory import AttackMemoryStore
+
+        planner = AdaptiveRedPlanner(AttackMemoryStore())
+        table = planner.score_strategies(headroom_ratio=1.0)
+        scored = {row["strategy"] for row in table}
+        assert {"RAIL_SCOPE_VIOLATION", "PER_TX_BREACH", "LAPSED_MANDATE"} <= scored
+        for row in table:
+            if row["strategy"] in ("RAIL_SCOPE_VIOLATION", "PER_TX_BREACH", "LAPSED_MANDATE"):
+                assert row["score"] > 0.0
+                assert row["expected_defence"].startswith("INV_0")
+
+
+class TestCounterfactualIsolation:
+    """
+    "What if the limit had been X?" is an OBSERVATION. Running those
+    hypotheticals against the live orchestrator previously reset the authority
+    between each simulated ceiling, which wiped the operator's rail scope and
+    per-transaction cap, erased the event log, and cleared last_round - so
+    Incident Report / Policy Advisor / Customer Notice all began reporting
+    "no round has been executed yet" right after a counterfactual ran.
+    """
+
+    def test_sandbox_shares_the_model_but_not_the_mutable_state(self):
+        from app.arena.orchestrator import ArenaBattleOrchestrator
+
+        live = ArenaBattleOrchestrator()
+        sandbox = live.sandbox()
+
+        # Expensive, stateless components are shared to keep what-ifs fast.
+        assert sandbox.detector is live.detector
+        assert sandbox.pqc_module is live.pqc_module
+        # Everything carrying round state must be independent.
+        assert sandbox.ledger is not live.ledger
+        assert sandbox.recorder is not live.recorder
+        assert sandbox.simulator is not live.simulator
+        assert sandbox.feedback_engine is not live.feedback_engine
+
+    def test_running_a_hypothetical_leaves_live_state_untouched(self):
+        import asyncio
+
+        from app.arena.orchestrator import AUTHORITY_ID, ArenaBattleOrchestrator
+        from app.models.state import PaymentRailType
+
+        live = ArenaBattleOrchestrator()
+        live.reset(12000.0)
+        # Go through the operator-facing setter (what POST /api/arena/
+        # authority-scope calls), so the choice is recorded as the operator's
+        # baseline grant rather than a transient ledger mutation.
+        live.set_authority_scope({
+            "permitted_rails": [PaymentRailType.UPI_CIRCLE],
+            "per_transaction_cap": 3000.0,
+        })
+        asyncio.run(live.run_round_stream(
+            round_number=2, dtl_enabled=True, event_callback=None,
+            speed=100.0, strategy_override="CROSS_RAIL_SPLIT"))
+
+        events_before = len(live.recorder.events)
+        assert events_before > 0 and live.last_round is not None
+
+        # A hypothetical at a different ceiling.
+        sandbox = live.sandbox()
+        sandbox.reset(5000.0)
+        asyncio.run(sandbox.run_round_stream(
+            round_number=2, dtl_enabled=True, event_callback=None,
+            speed=100.0, strategy_override="CROSS_RAIL_SPLIT"))
+
+        auth = live.ledger.get_authority(AUTHORITY_ID)
+        assert auth.permitted_rail_values == ["UPI_CIRCLE"], "rail scope must survive a what-if"
+        assert auth.per_transaction_cap == 3000.0, "per-tx cap must survive a what-if"
+        assert auth.global_budget_ceiling == 12000.0, "live ceiling must survive a what-if"
+        assert len(live.recorder.events) == events_before, "event log must survive a what-if"
+        assert live.last_round is not None, "last_round must survive a what-if"
+
+
+class TestEveryVectorIsActuallyRunnable:
+    """
+    Three of the original six vectors (BASELINE_POISONING, REVOCATION_FLOOD,
+    VELOCITY_BURST) returned HTTP 500 for the entire life of the project: their
+    generators return a LIST of transactions, but the selector wrapped them in
+    another list, so the round crashed on `t.amount` with "'list' object has no
+    attribute 'amount'". Selecting "all vectors" in the UI hit it immediately.
+    """
+
+    def test_every_strategy_yields_a_flat_list_of_transactions(self):
+        from app.arena.orchestrator import STRATEGY_BY_ROUND, ArenaBattleOrchestrator
+        from app.models.transactions import SyntheticTransaction
+
+        orch = ArenaBattleOrchestrator()
+        for strategy in STRATEGY_BY_ROUND.values():
+            txs = orch._select_attack(strategy)
+            assert isinstance(txs, list) and txs, f"{strategy} produced nothing"
+            assert all(isinstance(t, SyntheticTransaction) for t in txs), \
+                f"{strategy} produced a nested/!SyntheticTransaction payload"
+            # The exact expression that used to crash the round.
+            assert sum(t.amount for t in txs) > 0
+
+    def test_every_strategy_completes_a_round(self):
+        import asyncio
+
+        from app.arena.orchestrator import STRATEGY_BY_ROUND, ArenaBattleOrchestrator
+
+        orch = ArenaBattleOrchestrator()
+        for round_number, strategy in STRATEGY_BY_ROUND.items():
+            orch.reset(10000.0)
+            result = asyncio.run(orch.run_round_stream(
+                round_number=round_number, dtl_enabled=True, event_callback=None,
+                speed=100.0, strategy_override=strategy))
+            assert result["winner"] in ("RED", "BLUE", "NONE"), strategy
+            assert result["step_results"], f"{strategy} produced no steps"
+
+
+class TestVectorProfilesDoNotContaminateLaterRounds:
+    """
+    A vector that re-grants the authority to demonstrate its dimension must not
+    leave that grant in force for the next vector. Running the full campaign
+    previously reported INV_05_PER_TX_CAP_EXCEEDED for Intent Laundering and
+    Scope Creep - the per-transaction cap from PER_TX_BREACH was still applied -
+    so those vectors demonstrated the wrong invariant entirely.
+    """
+
+    EXPECTED_DIMENSION = {
+        "CROSS_RAIL_SPLIT": "AMOUNT",
+        "RAIL_SCOPE_VIOLATION": "RAIL",
+        "PER_TX_BREACH": "PER_TX",
+        "INTENT_LAUNDERING": "PURPOSE",
+        "SCOPE_CREEP": "MERCHANT",
+        "LAPSED_MANDATE": "TIME",
+    }
+
+    def test_full_campaign_demonstrates_each_dimension_in_turn(self):
+        import asyncio
+
+        from app.arena.orchestrator import ArenaBattleOrchestrator
+
+        orch = ArenaBattleOrchestrator()
+        orch.reset(10000.0)
+        # Deliberately ordered so the profile-bearing vectors run BEFORE the
+        # ones that rely on the operator's own grant.
+        order = ["CROSS_RAIL_SPLIT", "RAIL_SCOPE_VIOLATION", "PER_TX_BREACH",
+                 "INTENT_LAUNDERING", "SCOPE_CREEP", "LAPSED_MANDATE"]
+        for strategy in order:
+            result = asyncio.run(orch.run_round_stream(
+                round_number=2, dtl_enabled=True, event_callback=None,
+                speed=100.0, strategy_override=strategy))
+            proofs = [s["proof"] for s in result["step_results"] if s.get("proof")]
+            assert proofs, f"{strategy} should violate its dimension"
+            assert proofs[0]["authority_dimension"] == self.EXPECTED_DIMENSION[strategy], (
+                f"{strategy} reported {proofs[0]['authority_dimension']} - a previous "
+                f"vector's profile is still in force"
+            )
+
+    def test_an_optional_dimension_can_be_cleared_back_to_unconstrained(self):
+        from app.dtl.ledger import DTLLedger
+
+        ledger = DTLLedger()
+        ledger.update_authority_scope(AUTHORITY_ID, {"per_transaction_cap": 3000.0})
+        assert ledger.get_authority(AUTHORITY_ID).per_transaction_cap == 3000.0
+
+        # Without allow_none the None is treated as "leave alone", so the cap
+        # could never be lifted again.
+        ledger.update_authority_scope(AUTHORITY_ID, {"per_transaction_cap": None})
+        assert ledger.get_authority(AUTHORITY_ID).per_transaction_cap == 3000.0
+
+        ledger.update_authority_scope(AUTHORITY_ID, {"per_transaction_cap": None}, allow_none=True)
+        assert ledger.get_authority(AUTHORITY_ID).per_transaction_cap is None
+
+    def test_operator_scope_survives_a_profile_bearing_vector(self):
+        """An operator who set "UPI only" must get it back after a vector round."""
+        import asyncio
+
+        from app.arena.orchestrator import ArenaBattleOrchestrator
+        from app.models.state import PaymentRailType
+
+        orch = ArenaBattleOrchestrator()
+        orch.reset(12000.0)
+        orch.set_authority_scope({"permitted_rails": [PaymentRailType.UPI_CIRCLE]})
+
+        # PER_TX_BREACH re-grants with all rails + a cap.
+        asyncio.run(orch.run_round_stream(
+            round_number=8, dtl_enabled=True, event_callback=None,
+            speed=100.0, strategy_override="PER_TX_BREACH"))
+        # A vector with no profile must restore the operator's UPI-only grant.
+        asyncio.run(orch.run_round_stream(
+            round_number=1, dtl_enabled=True, event_callback=None,
+            speed=100.0, strategy_override="INTENT_LAUNDERING"))
+
+        auth = orch.ledger.get_authority(AUTHORITY_ID)
+        assert auth.permitted_rail_values == ["UPI_CIRCLE"]
+        assert auth.per_transaction_cap is None
+        assert auth.global_budget_ceiling == 12000.0

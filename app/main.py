@@ -172,7 +172,10 @@ def load_artifact(path: str) -> Dict[str, Any]:
                 data = json.load(f)
             data["_artifact"] = {
                 "status": "LOADED",
-                "path": os.path.relpath(path, os.path.dirname(DOCS_DIR)),
+                # Forward slashes even on Windows: browsers give backslash-joined
+                # paths no line-break opportunity, which forced the provenance
+                # footer to blow out its container width on real demo laptops.
+                "path": os.path.relpath(path, os.path.dirname(DOCS_DIR)).replace(os.sep, "/"),
                 "generated_at": datetime.fromtimestamp(os.path.getmtime(path), timezone.utc).isoformat(),
             }
             return data
@@ -322,8 +325,10 @@ def verify_event_log() -> Dict[str, Any]:
 
 
 @app.get("/api/arena/recordings")
-def list_recordings() -> Dict[str, Any]:
-    return {"recordings": EventRecorder.list_recordings()}
+def list_recordings(limit: int = 40) -> Dict[str, Any]:
+    """Most recent recordings, newest first. Bounded so the replay panel does
+    not re-read every round ever recorded on each poll."""
+    return {"recordings": EventRecorder.list_recordings(limit=limit)}
 
 
 @app.get("/api/arena/replay/{experiment_id}")
