@@ -67,6 +67,13 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
         "severity": "HIGH",
     },
     {
+        "code": "INV_07_UNAUTHORIZED_BENEFICIARY",
+        "dimension": AuthorityDimension.BENEFICIARY.value,
+        "question": "Is the settlement counterparty inside the delegated beneficiary scope?",
+        "expression": "ASSERT tx.vpa_delegate IN authority.beneficiary_scope",
+        "severity": "HIGH",
+    },
+    {
         "code": "INV_02_SEMANTIC_INTENT_DRIFT",
         "dimension": AuthorityDimension.PURPOSE.value,
         "question": "Does the basket match the authorised economic purpose?",
@@ -126,6 +133,7 @@ class DTLInvariantEngine:
             self._check_rail,
             self._check_per_tx_cap,
             self._check_mcc,
+            self._check_beneficiary,
             self._check_semantic_purpose,
             self._check_global_budget,
         )
@@ -274,6 +282,35 @@ class DTLInvariantEngine:
                 f"MCC {tx.merchant_mcc} ({tx.merchant_name}) is outside the delegated merchant "
                 f"scope {auth.permitted_mccs}. The rail approves because the card and the merchant "
                 f"are both valid; only the delegation knows which categories the human meant."
+            ),
+        )
+
+    def _check_beneficiary(self, auth, tx, now) -> Optional[SemanticDriftProof]:
+        """
+        INV_07 - BENEFICIARY. A grant can name WHO the money may settle to, not
+        just how much, on what rail, and at what merchant category. "Pay the
+        electricity board" does not authorise the same amount landing at a
+        different VPA that merely also carries an in-scope MCC - the rail and
+        the merchant look identical to a legitimate payment.
+        """
+        if auth.allows_beneficiary(tx.vpa_delegate):
+            return None
+        scope = list(auth.beneficiary_scope)
+        return self._proof(
+            auth, tx, prefix="proof_beneficiary",
+            code="INV_07_UNAUTHORIZED_BENEFICIARY",
+            dimension=AuthorityDimension.BENEFICIARY.value,
+            severity="HIGH",
+            authorized=f"Beneficiary restricted to: {', '.join(scope) if scope else 'none'}",
+            actual=f"Settlement routed to {tx.vpa_delegate or 'an unrecorded beneficiary'}",
+            drift_score=0.82,
+            expression="ASSERT tx.vpa_delegate IN authority.beneficiary_scope",
+            explanation=(
+                f"The delegation restricts settlement to {', '.join(scope) or 'no beneficiary'}, but "
+                f"this transaction settles to {tx.vpa_delegate or 'an unrecorded counterparty'}. Rail, "
+                f"amount and merchant category can all be legitimate while the money still ends up "
+                f"somewhere the human never authorised - the rail has no concept of 'the same "
+                f"counterparty the user meant'."
             ),
         )
 

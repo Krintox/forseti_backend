@@ -46,7 +46,27 @@ FEATURE_GROUPS = {
         "regrant_frequency",       # rapid regrants
         "velocity_spike_indicator",# 1 if tx frequency > 3 sigma
         "mcc_entropy"              # entropy across visited MCCs
-    ]
+    ],
+    # Payment Graph Sentinel (see graph_sentinel/graph_builder.py): the ONLY
+    # group that can see a pattern across DIFFERENT authorities - every other
+    # group is computed from one authority's own state and history alone.
+    # graph_agent_out_degree..graph_device_shared_count are looked up from a
+    # PaymentGraph snapshot the caller passes in (graph_features param below);
+    # they default to 0.0 when no graph context is available - honestly, not
+    # fabricated, since a single live arena round genuinely has no
+    # cross-authority signal to offer. graph_cross_rail_fanout_velocity is the
+    # one graph feature computed here directly from tx_history, since it
+    # needs no cross-authority graph at all.
+    "graph": [
+        "graph_agent_out_degree",       # distinct merchants this agent has paid so far
+        "graph_merchant_in_degree",     # distinct agents that have paid this merchant so far
+        "graph_agent_pagerank",         # PageRank of the agent node in the agent-merchant graph
+        "graph_merchant_pagerank",      # PageRank of the merchant node
+        "graph_agent_betweenness",      # betweenness centrality of the agent node
+        "graph_community_size_ratio",   # size of this agent's Louvain community / total nodes
+        "graph_device_shared_count",    # distinct agents seen using this transaction's device
+        "graph_cross_rail_fanout_velocity",  # distinct rails in the trailing 10 txns / window size
+    ],
 }
 
 ALL_FEATURE_NAMES: List[str] = [
@@ -76,11 +96,11 @@ class DTLFeatureExtractor:
             )
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         schema_data = {
-            "version": "2.1.0",
+            "version": "2.3.0",
             "feature_count": len(ALL_FEATURE_NAMES),
             "feature_names": ALL_FEATURE_NAMES,
             "feature_groups": FEATURE_GROUPS,
-            "description": "Unified 5-Group Feature Schema for FORSETI Hybrid ML Detector."
+            "description": "Unified 6-Group Feature Schema for FORSETI Hybrid ML Detector."
         }
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(schema_data, f, indent=2)
@@ -119,7 +139,8 @@ class DTLFeatureExtractor:
     def extract_features(
         auth: DTLGlobalAuthorityState,
         tx: SyntheticTransaction,
-        tx_history: Optional[List[Dict[str, Any]]] = None
+        tx_history: Optional[List[Dict[str, Any]]] = None,
+        graph_features: Optional[Dict[str, float]] = None,
     ) -> Dict[str, float]:
         """
         Extracts the full engineered feature vector from a transaction and the
@@ -129,6 +150,15 @@ class DTLFeatureExtractor:
         the trailing history window. An earlier version returned fixed constants
         for nine of these fields, which both leaked no information to the model
         and misrepresented what was being measured.
+
+        `graph_features` is an OPTIONAL cross-authority graph snapshot (see
+        graph_sentinel/PaymentGraph.snapshot_features) - the caller must have
+        computed it BEFORE this transaction was added to the graph, or it
+        leaks the transaction's own effect into its own features. When absent
+        (every live arena call today - a single round has only one authority,
+        so there is no cross-authority graph to query), every graph_* feature
+        except graph_cross_rail_fanout_velocity defaults to 0.0, honestly
+        reflecting "no signal available" rather than fabricating one.
         """
         history = tx_history or []
         now = tx.created_at if isinstance(tx.created_at, datetime) else datetime.utcnow()
@@ -269,6 +299,25 @@ class DTLFeatureExtractor:
             [h.get("mcc") for h in last_24h if h.get("mcc")] + [tx.merchant_mcc]
         )
 
+        # ------------------------------------------------------------ graph
+        # Needs no cross-authority graph: distinct rails in the trailing 10
+        # transactions (this one included) over the window actually available.
+        trailing = [h for h in history[-9:] if h.get("rail")]
+        trailing_rails = {str(h.get("rail")) for h in trailing}
+        trailing_rails.add(str(tx.rail.value if hasattr(tx.rail, "value") else tx.rail))
+        window_size = len(trailing) + 1
+        cross_rail_fanout_velocity = float(len(trailing_rails)) / float(window_size)
+
+        graph_feats = dict(graph_features or {})
+        graph_feats.setdefault("graph_agent_out_degree", 0.0)
+        graph_feats.setdefault("graph_merchant_in_degree", 0.0)
+        graph_feats.setdefault("graph_agent_pagerank", 0.0)
+        graph_feats.setdefault("graph_merchant_pagerank", 0.0)
+        graph_feats.setdefault("graph_agent_betweenness", 0.0)
+        graph_feats.setdefault("graph_community_size_ratio", 0.0)
+        graph_feats.setdefault("graph_device_shared_count", 0.0)
+        graph_feats["graph_cross_rail_fanout_velocity"] = cross_rail_fanout_velocity
+
         features: Dict[str, float] = {
             # Raw
             "amount": float(tx.amount),
@@ -307,8 +356,9 @@ class DTLFeatureExtractor:
             "revocation_rate_1h": revocation_rate,
             "regrant_frequency": regrant_freq,
             "velocity_spike_indicator": velocity_spike,
-            "mcc_entropy": mcc_entropy
+            "mcc_entropy": mcc_entropy,
         }
+        features.update(graph_feats)
 
         return features
 
@@ -316,7 +366,8 @@ class DTLFeatureExtractor:
     def extract_feature_vector(
         auth: DTLGlobalAuthorityState,
         tx: SyntheticTransaction,
-        tx_history: Optional[List[Dict[str, Any]]] = None
+        tx_history: Optional[List[Dict[str, Any]]] = None,
+        graph_features: Optional[Dict[str, float]] = None,
     ) -> List[float]:
-        feat_dict = DTLFeatureExtractor.extract_features(auth, tx, tx_history)
+        feat_dict = DTLFeatureExtractor.extract_features(auth, tx, tx_history, graph_features)
         return [feat_dict.get(name, 0.0) for name in ALL_FEATURE_NAMES]

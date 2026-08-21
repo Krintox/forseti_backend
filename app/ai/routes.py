@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from ..arena.orchestrator import STRATEGY_AUTHORITY_PROFILE
+from ..models.state import PaymentRailType
 from ..paths import ABLATION_PATH, BASELINES_PATH, METRICS_PATH
 from . import agents as A
 from .llm_client import get_client
@@ -200,46 +202,86 @@ def register(app, orchestrator) -> None:
     @router.post("/counterfactual")
     async def counterfactual(req: CounterfactualRequest) -> Dict[str, Any]:
         """
-        The model proposes ceilings; the SIMULATOR answers. Each proposal is
+        The model proposes parameters; the SIMULATOR answers. Each proposal is
         re-run for real against the same attack, and the outcome reported is the
         engine's, not the model's.
+
+        Beyond the original AMOUNT-only ceiling sweep, this now also supports
+        RAIL ("what if the card rail had been disabled") and PURPOSE ("what if
+        gift cards had been permitted") - but only for rounds whose strategy has
+        no FIXED authority profile of its own. RAIL_SCOPE_VIOLATION,
+        PER_TX_BREACH, LAPSED_MANDATE, BENEFICIARY_DRIFT and CONSTRAINT_EROSION
+        each demonstrate their point by re-granting a specific profile at the
+        start of every round they run in (see STRATEGY_AUTHORITY_PROFILE); a
+        rail/purpose mutation proposed for one of those would be silently
+        overwritten by that fixed profile at replay time, and reporting a result
+        anyway would misrepresent what was actually tested.
         """
         last = orchestrator.last_round
         if last is None:
             return {"agent": "counterfactual_analyst", "status": "NO_INCIDENT", "result": None,
                     "reason": "No round has been executed yet."}
 
-        proposal = A.propose_counterfactual(req.question, last)
+        strategy = last.get("strategy", "CROSS_RAIL_SPLIT")
+        dims = ["AMOUNT"] if strategy in STRATEGY_AUTHORITY_PROFILE else ["AMOUNT", "RAIL", "PURPOSE"]
+
+        proposal = A.propose_counterfactual(req.question, last, available_dimensions=dims)
         if proposal.get("status") != "OK" or not proposal.get("result"):
             return proposal
 
-        strategy = last.get("strategy", "CROSS_RAIL_SPLIT")
+        baseline_ceiling = float(last.get("authority_state", {}).get("global_budget_ceiling", 10000.0))
+        all_rails = [PaymentRailType.CARD_TOKEN, PaymentRailType.UPI_CIRCLE, PaymentRailType.AGENTIC_AP2]
 
         # Each hypothetical runs in an isolated sandbox orchestrator. Running
-        # them against the live one would reset the authority between ceilings,
+        # them against the live one would reset the authority between runs,
         # wiping the operator's rail scope, per-transaction cap, event log and
         # last_round - which then broke every other incident-driven agent.
         # A what-if must be observation-only.
         runs = []
         for param in proposal["result"]["parameters_to_test"][:4]:
-            ceiling = float(param["ceiling_inr"])
+            dimension = param["dimension"]
             sandbox = orchestrator.sandbox()
-            sandbox.reset(ceiling)
+
+            if dimension == "AMOUNT":
+                ceiling = float(param["ceiling_inr"])
+                sandbox.reset(ceiling)
+                parameter_summary = f"Ceiling set to INR {ceiling:,.0f}"
+            elif dimension == "RAIL":
+                sandbox.reset(baseline_ceiling)
+                remaining = [r for r in all_rails if r.value != param["disable_rail"]]
+                sandbox.set_authority_scope({"permitted_rails": remaining})
+                parameter_summary = f"{param['disable_rail']} disabled"
+            else:  # PURPOSE
+                sandbox.reset(baseline_ceiling)
+                if param.get("permit_gift_cards"):
+                    sandbox.set_authority_scope({"semantic_exclusions": ["CRYPTO_TOKEN", "RE_LIQUEFIABLE"]})
+                    parameter_summary = "Gift cards / stored value permitted"
+                else:
+                    parameter_summary = "Gift cards remain excluded (baseline)"
+
             result = await sandbox.run_round_stream(
                 round_number=2, dtl_enabled=True, event_callback=None,
                 speed=100.0, strategy_override=strategy)
+            result_ceiling = float(result["authority_state"]["global_budget_ceiling"])
             runs.append({
+                "dimension": dimension,
                 "label": param.get("label", ""),
-                "ceiling_inr": ceiling,
+                "parameter_summary": parameter_summary,
+                "ceiling_inr": result_ceiling,
                 "contained": result["detected"],
                 "winner": result["winner"],
                 "final_exposure_inr": result["authority_state"]["total_exposure_global"],
-                "breached": result["authority_state"]["total_exposure_global"] > ceiling,
+                "breached": result["authority_state"]["total_exposure_global"] > result_ceiling,
+                # Read back from the actual sandboxed grant, not echoed from the
+                # input - proof the mutation really took effect, not just that
+                # it was requested.
+                "permitted_rails_tested": result["authority_state"]["permitted_rails"],
+                "semantic_exclusions_tested": result["authority_state"]["semantic_exclusions"],
             })
 
         proposal["simulated_outcomes"] = runs
         proposal["answer"] = _counterfactual_answer(runs)
-        proposal["method"] = ("The model proposed the ceilings; the deterministic simulator "
+        proposal["method"] = ("The model proposed the parameters; the deterministic simulator "
                               "re-ran the identical attack against each and produced these outcomes.")
         return proposal
 
@@ -250,11 +292,24 @@ def _counterfactual_answer(runs: List[Dict[str, Any]]) -> str:
     """States the result from the simulation runs, never from the model."""
     if not runs:
         return "No scenarios were simulated."
-    contained = [r for r in runs if r["contained"]]
-    if not contained:
-        return (f"None of the {len(runs)} tested ceilings contained the attack. "
-                f"Lower ceilings than those proposed would be required.")
-    best = max(contained, key=lambda r: r["ceiling_inr"])
-    return (f"{len(contained)} of {len(runs)} tested ceilings contained the attack. "
-            f"The highest ceiling that still contained it was "
-            f"INR {best['ceiling_inr']:,.0f} ({best['label'] or 'proposed'}).")
+
+    parts: List[str] = []
+    amount_runs = [r for r in runs if r["dimension"] == "AMOUNT"]
+    other_runs = [r for r in runs if r["dimension"] != "AMOUNT"]
+
+    if amount_runs:
+        contained = [r for r in amount_runs if r["contained"]]
+        if contained:
+            best = max(contained, key=lambda r: r["ceiling_inr"])
+            parts.append(
+                f"{len(contained)} of {len(amount_runs)} tested ceilings contained the attack; "
+                f"the highest that still did was INR {best['ceiling_inr']:,.0f} ({best['label'] or 'proposed'})."
+            )
+        else:
+            parts.append(f"None of the {len(amount_runs)} tested ceilings contained the attack.")
+
+    for r in other_runs:
+        verdict = "still contained the attack" if r["contained"] else "did NOT contain the attack"
+        parts.append(f"{r['parameter_summary']}: {verdict}.")
+
+    return " ".join(parts)

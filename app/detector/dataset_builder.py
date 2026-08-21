@@ -4,6 +4,7 @@ from typing import List, Dict, Tuple, Any, Optional
 import pandas as pd
 import numpy as np
 
+from ..graph_sentinel import PaymentGraph
 from ..models.state import DTLGlobalAuthorityState, PaymentRailType
 from ..models.transactions import SyntheticTransaction, CartItem
 from .feature_schema import DTLFeatureExtractor, ALL_FEATURE_NAMES
@@ -20,9 +21,45 @@ class SyntheticMLDatasetBuilder:
         self.seed = seed
         random.seed(seed)
         np.random.seed(seed)
+        self.last_graph: Optional[PaymentGraph] = None
 
     # Attacks that are inherently multi-leg: a single row cannot represent them.
     MULTI_LEG_FAMILIES = {"CROSS_RAIL_SPLIT": (3, 4), "VELOCITY_BURST": (4, 7)}
+
+    # A small pool of "compromised/shared" device fingerprints, standing in
+    # for a fraud ring reusing hardware across nominally-unrelated agents.
+    # Attacks reach for one far more often than legitimate traffic does
+    # (15% vs 3%) - correlated with the label, deliberately not perfectly so,
+    # matching the anti-circularity discipline the rest of this generator
+    # already applies to stored-value overlap and amount-range overlap.
+    SHARED_DEVICE_POOL = ["dev_ring_alpha", "dev_ring_beta", "dev_ring_gamma"]
+
+    def _assign_device(self, auth: DTLGlobalAuthorityState, is_attack: bool) -> str:
+        ring_prob = 0.15 if is_attack else 0.03
+        if random.random() < ring_prob:
+            return random.choice(self.SHARED_DEVICE_POOL)
+        return f"dev_primary_{auth.authority_id}"
+
+    # _build_transaction routes EVERY attack family through exactly one fixed
+    # merchant_id (merch_split_chain, merch_laundering_mega, ...) and
+    # legitimate traffic through another. Without diversification, any
+    # per-merchant graph feature (in-degree, PageRank) becomes a near-perfect
+    # fingerprint of the label - the model learns "which merchant string this
+    # is", not a fraud-ring pattern, which is exactly the kind of proxy
+    # leakage the amount-range and stored-value overlaps elsewhere in this
+    # file exist to prevent. Rerouting a slice of ALL traffic through a small
+    # shared pool, regardless of family, breaks that 1:1 mapping.
+    COMMON_MERCHANT_POOL = [
+        ("merch_common_hub_01", "CityWide Retail Hub"),
+        ("merch_common_hub_02", "Metro Shopping Plaza"),
+        ("merch_common_hub_03", "Neighborhood Super Center"),
+    ]
+
+    def _diversify_merchant(self, tx: SyntheticTransaction) -> None:
+        if random.random() < 0.22:
+            merchant_id, merchant_name = random.choice(self.COMMON_MERCHANT_POOL)
+            tx.merchant_id = merchant_id
+            tx.merchant_name = merchant_name
 
     def generate_trajectory(
         self,
@@ -90,6 +127,13 @@ class SyntheticMLDatasetBuilder:
         rails_all = [PaymentRailType.CARD_TOKEN, PaymentRailType.UPI_CIRCLE, PaymentRailType.AGENTIC_AP2]
         attack_counter = 0
 
+        # Cross-authority entity graph, built incrementally across the WHOLE
+        # trajectory (not per-authority) - the point of Payment Graph Sentinel
+        # is exactly the signal that only exists across authorities, e.g. many
+        # different agents converging on one merchant, or several agents
+        # sharing a device fingerprint.
+        graph = PaymentGraph()
+
         def roll_window(auth_id: str, auth: DTLGlobalAuthorityState, now: datetime) -> None:
             """Re-grants the delegation when its validity window elapses."""
             if (now - window_started_at[auth_id]).total_seconds() >= window_hours * 3600.0:
@@ -107,7 +151,13 @@ class SyntheticMLDatasetBuilder:
                  is_attack: bool, now: datetime) -> None:
             """Extracts features BEFORE applying the spend, then books it."""
             history = auth_histories[auth_id]
-            features = DTLFeatureExtractor.extract_features(auth, tx, history)
+            # Graph snapshot BEFORE this transaction's own edge is added -
+            # otherwise a transaction's features would include its own effect
+            # on the graph (e.g. its own device-sharing edge inflating its own
+            # graph_device_shared_count).
+            graph_feats = graph.snapshot_features(auth.agent_id, tx.merchant_id, tx.device_id)
+            features = DTLFeatureExtractor.extract_features(auth, tx, history, graph_features=graph_feats)
+            graph.add_transaction(auth.agent_id, tx.merchant_id, tx.device_id)
 
             # Book the spend AFTER feature extraction so a transaction never sees
             # its own effect on exposure. Settlement is not instant: a share stays
@@ -250,11 +300,31 @@ class SyntheticMLDatasetBuilder:
                     item.unit_price = tx.amount / max(1, len(tx.items))
             emit(auth_id, auth, tx, fam, False, current_time)
 
+        # One last refresh so the graph's own global metrics (not any already-
+        # generated row's features, which were all snapshotted before their
+        # own edge was added) reflect the FULL trajectory - useful for
+        # introspection/tests via self.last_graph.stats(), not consumed here.
+        graph.refresh_global_metrics()
+        self.last_graph = graph
+
         df = pd.DataFrame(records[:num_samples])
         df = df.sort_values(by="timestamp_unix").reset_index(drop=True)
         return df
 
     def _create_transaction(
+        self,
+        auth: DTLGlobalAuthorityState,
+        attack_family: str,
+        timestamp: datetime,
+        is_attack: bool
+    ) -> Tuple[SyntheticTransaction, str]:
+        """Builds the transaction, then de-fingerprints merchant/device identity."""
+        tx, fam = self._build_transaction(auth, attack_family, timestamp, is_attack)
+        self._diversify_merchant(tx)
+        tx.device_id = self._assign_device(auth, is_attack)
+        return tx, fam
+
+    def _build_transaction(
         self,
         auth: DTLGlobalAuthorityState,
         attack_family: str,

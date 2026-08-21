@@ -37,6 +37,29 @@ class SemanticDriftProof(BaseModel):
     pqc_signature_bytes_hex: str = "4a8f9c1e2b..."
     pqc_verified: bool = True
 
+class DeceptionProof(BaseModel):
+    """
+    Evidence that an attack targeted the AGENT's reasoning rather than a
+    payment rail or the delegated-authority ledger. Distinct from
+    SemanticDriftProof: a drift proof says "this action is outside the grant";
+    a deception proof says "the agent was fed a false premise, and here is the
+    deterministic ground truth that contradicted it regardless of whether the
+    agent's own reasoning was fooled."
+    """
+    proof_id: str
+    tx_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    deception_type: str  # PROMPT_INJECTION | TOOL_OUTPUT_POISONING | CONTEXT_MEMORY_POISONING | AUTHORITY_IMPERSONATION
+    severity: str = "HIGH"
+
+    # What the agent was exposed to / told / led to believe.
+    deceptive_input: str
+    # What the deterministic system actually verified instead of trusting it.
+    ground_truth_check: str
+    explanation: str
+
+
 class StateConsistencyProof(BaseModel):
     proof_id: str
     authority_id: str

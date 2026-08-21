@@ -38,10 +38,18 @@ class ClosedLoopFeedbackEngine:
         red_reasoning: str,
         auth_state: DTLGlobalAuthorityState
     ) -> Dict[str, Any]:
-        # Blue adapts
+        # Blue adapts, escalating if this SAME invariant has fired before -
+        # count prior occurrences BEFORE appending this round's record, so a
+        # first-time violation still gets violation_count=1 (the soft
+        # response), not the escalated one.
         blue_desc, changes = "", {}
         if is_detected and violating_invariant:
-            blue_desc, changes = self.blue_adapter.adapt_policy(auth_state, violating_invariant)
+            prior_hits = sum(
+                1 for r in self.memory.history if r.violating_invariant == violating_invariant
+            )
+            blue_desc, changes = self.blue_adapter.adapt_policy(
+                auth_state, violating_invariant, violation_count=prior_hits + 1
+            )
 
         record = AttackAttemptRecord(
             round_id=round_id,

@@ -27,7 +27,12 @@ from ..detector.inference import HybridMLDetectorInference
 from ..dtl.cost_governor import AdversarialCostGovernor
 from ..dtl.invariant_engine import DTLInvariantEngine
 from ..dtl.ledger import DTLLedger
+from ..deception_lab import evaluate_all as evaluate_deception
 from ..feedback.feedback_engine import ClosedLoopFeedbackEngine
+from ..intent_firewall import firewall_decision
+from ..kill_chain import coverage as kill_chain_coverage
+from ..kill_chain import score_round as score_kill_chain_round
+from ..risk_engine import compute_unified_risk
 from ..models.state import DefensePolicy, DTLGlobalAuthorityState, PaymentRailType
 from ..models.transactions import SyntheticTransaction
 from ..paths import EVENTS_DIR
@@ -35,6 +40,14 @@ from ..redteam.vectors.authority_scope import (
     LapsedMandateVector,
     PerTransactionBreachVector,
     RailScopeViolationVector,
+)
+from ..redteam.vectors.beneficiary_drift import BeneficiaryDriftVector
+from ..redteam.vectors.constraint_erosion import ConstraintErosionVector
+from ..redteam.vectors.deception import (
+    AuthorityImpersonationVector,
+    ContextPoisoningVector,
+    PromptInjectionVector,
+    ToolOutputPoisoningVector,
 )
 from ..redteam.vectors.cross_rail_split import CrossRailSplitVector
 from ..redteam.vectors.intent_laundering import IntentLaunderingVector
@@ -63,6 +76,12 @@ STRATEGY_BY_ROUND = {
     7: "RAIL_SCOPE_VIOLATION",
     8: "PER_TX_BREACH",
     9: "LAPSED_MANDATE",
+    10: "BENEFICIARY_DRIFT",
+    11: "PROMPT_INJECTION",
+    12: "TOOL_OUTPUT_POISONING",
+    13: "CONTEXT_MEMORY_POISONING",
+    14: "AUTHORITY_IMPERSONATION",
+    15: "CONSTRAINT_EROSION",
 }
 
 STRATEGY_NARRATIVE = {
@@ -75,6 +94,12 @@ STRATEGY_NARRATIVE = {
     "RAIL_SCOPE_VIOLATION": "Stay inside the money limit, but use a payment rail the user never authorised.",
     "PER_TX_BREACH": "Keep the aggregate legal while breaking the per-transaction bound the user set.",
     "LAPSED_MANDATE": "Present a perfectly in-scope basket after the delegation's validity window closed.",
+    "BENEFICIARY_DRIFT": "Keep rail, amount and merchant category in scope while settling to a beneficiary the grant never named.",
+    "PROMPT_INJECTION": "A compromised merchant response tries to talk the agent's own reasoning past its authority.",
+    "TOOL_OUTPUT_POISONING": "A product-search tool misreports what a cart actually contains.",
+    "CONTEXT_MEMORY_POISONING": "The agent's own context claims a stale, more permissive authorization than the live grant.",
+    "AUTHORITY_IMPERSONATION": "A sub-agent records itself as the approver of its own authority escalation.",
+    "CONSTRAINT_EROSION": "Spread purpose drift across four escalating legs instead of one obvious spike.",
 }
 
 # Which dimension of the delegated authority each vector is designed to attack.
@@ -91,6 +116,20 @@ STRATEGY_DIMENSION = {
     "BASELINE_POISONING": "AMOUNT",
     "REVOCATION_FLOOD": "TIME",
     "VELOCITY_BURST": "AMOUNT",
+    "BENEFICIARY_DRIFT": "BENEFICIARY",
+    # These four are NOT authority-dimension attacks - they target the AGENT's
+    # own reasoning (see deception_lab/), not the delegated grant. Deception
+    # Lab vectors are deliberately built to sit inside every real dimension of
+    # authority, so none of the seven values above would be honest here.
+    # "AGENT_INTEGRITY" is a display-only label, not an AuthorityDimension
+    # enum member - there is no INV_ code for it because deception detection
+    # is a parallel concern to authority-dimension enforcement, not a new row
+    # in the same table.
+    "PROMPT_INJECTION": "AGENT_INTEGRITY",
+    "TOOL_OUTPUT_POISONING": "AGENT_INTEGRITY",
+    "CONTEXT_MEMORY_POISONING": "AGENT_INTEGRITY",
+    "AUTHORITY_IMPERSONATION": "AGENT_INTEGRITY",
+    "CONSTRAINT_EROSION": "PURPOSE",
 }
 
 # Vectors that only mean something against a specific grant. Running "UPI only"
@@ -101,6 +140,8 @@ STRATEGY_AUTHORITY_PROFILE = {
     "RAIL_SCOPE_VIOLATION": RailScopeViolationVector.authority_profile,
     "PER_TX_BREACH": PerTransactionBreachVector.authority_profile,
     "LAPSED_MANDATE": LapsedMandateVector.authority_profile,
+    "BENEFICIARY_DRIFT": BeneficiaryDriftVector.authority_profile,
+    "CONSTRAINT_EROSION": ConstraintErosionVector.authority_profile,
 }
 
 
@@ -125,6 +166,14 @@ class ArenaBattleOrchestrator:
         self.configured_ceiling = 10000.0
         # Retained so the AI agents can reason over the most recent incident.
         self.last_round: Optional[Dict[str, Any]] = None
+        # Intent Firewall verdicts from the most recently completed round, one
+        # entry per transaction, newest last.
+        self.last_firewall_verdicts: List[Dict[str, Any]] = []
+        # Deception Lab verdicts, same shape/lifecycle as the firewall ones.
+        self.last_deception_verdicts: List[Dict[str, Any]] = []
+        # One kill_chain score per completed round this session, oldest
+        # first - the basis for the session-level coverage() rollup.
+        self.round_history: List[Dict[str, Any]] = []
         # The grant the OPERATOR configured, as distinct from one a vector
         # profile temporarily imposes. See _apply_operator_grant.
         self.operator_grant: Dict[str, Any] = {"global_budget_ceiling": 10000.0}
@@ -134,6 +183,7 @@ class ArenaBattleOrchestrator:
     _SCOPE_FIELDS = (
         "permitted_rails", "per_transaction_cap", "validity_window_hours",
         "permitted_mccs", "economic_purpose", "semantic_exclusions",
+        "beneficiary_scope",
     )
 
     @classmethod
@@ -200,6 +250,9 @@ class ArenaBattleOrchestrator:
         clone.is_running = False
         clone.configured_ceiling = self.configured_ceiling
         clone.last_round = None
+        clone.last_firewall_verdicts = []
+        clone.last_deception_verdicts = []
+        clone.round_history = []
         return clone
 
     # ------------------------------------------------------------- state
@@ -215,6 +268,9 @@ class ArenaBattleOrchestrator:
         self.feedback_engine.reset()
         self.recorder.reset()
         self.last_round = None
+        self.last_firewall_verdicts = []
+        self.last_deception_verdicts = []
+        self.round_history = []
         self.is_running = False
         return self.get_state()
 
@@ -297,6 +353,12 @@ class ArenaBattleOrchestrator:
         "REVOCATION_FLOOD": RevocationFloodVector,
         "VELOCITY_BURST": VelocitySpikeVector,
         "SCOPE_CREEP": ScopeCreepVector,
+        "BENEFICIARY_DRIFT": BeneficiaryDriftVector,
+        "PROMPT_INJECTION": PromptInjectionVector,
+        "TOOL_OUTPUT_POISONING": ToolOutputPoisoningVector,
+        "CONTEXT_MEMORY_POISONING": ContextPoisoningVector,
+        "AUTHORITY_IMPERSONATION": AuthorityImpersonationVector,
+        "CONSTRAINT_EROSION": ConstraintErosionVector,
     }
 
     def _select_attack(self, strategy: str) -> List[SyntheticTransaction]:
@@ -429,6 +491,8 @@ class ArenaBattleOrchestrator:
         ), pause=0.6)
 
         step_results: List[Dict[str, Any]] = []
+        firewall_verdicts: List[Dict[str, Any]] = []
+        deception_verdicts: List[Dict[str, Any]] = []
         last_proof = None
         highest_ml_prob = 0.0
 
@@ -478,9 +542,38 @@ class ArenaBattleOrchestrator:
                 },
             ), pause=0.45)
 
+            # ---- Deception Lab: does not depend on dtl_enabled or on any
+            # authority-dimension violation. This layer asks whether the AGENT
+            # was fed a false premise (injected instruction, poisoned tool
+            # result, fabricated memory, self-issued escalation) - orthogonal
+            # to whether the resulting action happens to be inside the grant.
+            deception_proofs = evaluate_deception(auth, tx)
+            deception_verdict = {
+                "tx_id": tx.tx_id,
+                "verdict": "DECEPTION_DETECTED" if deception_proofs else "CLEAN",
+                "detections": [
+                    {"type": p.deception_type, "severity": p.severity,
+                     "deceptive_input": p.deceptive_input,
+                     "ground_truth_check": p.ground_truth_check,
+                     "explanation": p.explanation, "proof_id": p.proof_id}
+                    for p in deception_proofs
+                ],
+                "count": len(deception_proofs),
+            }
+            deception_verdicts.append(deception_verdict)
+            await self._emit(event_callback, ev(
+                event_type=EventType.DECEPTION_LAB_VERDICT, actor=Actor.DTL, step=idx,
+                source=rail_name.lower(), target="dtl",
+                arrow_label=(f"DECEPTION LAB: {len(deception_proofs)} DETECTION(S)" if deception_proofs
+                             else "DECEPTION LAB: CLEAN"),
+                severity="critical" if deception_proofs else "success",
+                payload=deception_verdict,
+            ), pause=0.35)
+
             # ---- global DTL aggregation
             dtl_status = "UNPROTECTED_RAIL_BLIND"
             proof = None
+            violations: List[Any] = []
             containment_action = "NONE"
             projected = exposure_before + tx.amount
 
@@ -548,6 +641,21 @@ class ArenaBattleOrchestrator:
                             "proof_id": proof.proof_id,
                         },
                     ), pause=0.7)
+
+                # ---- Intent Firewall: the same proofs, reshaped into a
+                # per-dimension drift vector and an ALLOW/PARTIAL_DRIFT/
+                # HARD_DRIFT verdict. Emitted every step, not only on a
+                # violation, so "nothing drifted" is as visible as a breach.
+                verdict = firewall_decision.evaluate(tx.tx_id, violations)
+                firewall_verdicts.append(verdict)
+                await self._emit(event_callback, ev(
+                    event_type=EventType.INTENT_FIREWALL_VERDICT, actor=Actor.DTL, step=idx,
+                    source="dtl", target="cost_governor",
+                    arrow_label=f"INTENT FIREWALL: {verdict['verdict']}",
+                    severity="critical" if verdict["verdict"] == "HARD_DRIFT"
+                    else "warning" if verdict["verdict"] == "PARTIAL_DRIFT" else "success",
+                    payload=verdict,
+                ), pause=0.3)
             else:
                 # DTL disabled: this is the "legacy world" comparison.
                 self.ledger.finalize_authorized_spend(auth.authority_id, tx.amount)
@@ -719,7 +827,7 @@ class ArenaBattleOrchestrator:
 
         # ---- closed loop: red observes the defence and picks its next move
         detected = last_proof is not None
-        self.feedback_engine.record_round_outcome(
+        blue_outcome = self.feedback_engine.record_round_outcome(
             round_id=round_number,
             strategy=strategy,
             target_rails=[self._rail_name(t) for t in attacks],
@@ -742,13 +850,21 @@ class ArenaBattleOrchestrator:
         ), pause=0.4)
 
         if detected:
+            policy_changes = blue_outcome.get("policy_changes", {})
             await self._emit(event_callback, ev(
                 event_type=EventType.BLUE_ADAPTATION, actor=Actor.DTL,
                 source="dtl", target="policy",
-                arrow_label=f"POLICY HARDENED: {_policy_name(auth.active_policy)}",
+                arrow_label=(f"POLICY ESCALATED: {_policy_name(auth.active_policy)}"
+                             if policy_changes.get("escalated")
+                             else f"POLICY HARDENED: {_policy_name(auth.active_policy)}"),
                 severity="success",
-                payload={"active_policy": _policy_name(auth.active_policy),
-                         "violating_invariant": last_proof.invariant_code if last_proof else None},
+                payload={
+                    "active_policy": _policy_name(auth.active_policy),
+                    "violating_invariant": last_proof.invariant_code if last_proof else None,
+                    "violation_count": policy_changes.get("violation_count", 1),
+                    "escalated": policy_changes.get("escalated", False),
+                    "blue_adaptation_summary": blue_outcome.get("blue_adaptation_summary", ""),
+                },
             ), pause=0.35)
 
         # Three genuinely different endings, and conflating them misrepresents
@@ -784,6 +900,8 @@ class ArenaBattleOrchestrator:
         ), pause=0.2)
 
         self.is_running = False
+        self.last_firewall_verdicts = firewall_verdicts
+        self.last_deception_verdicts = deception_verdicts
 
         round_summary = {
             "round_number": round_number,
@@ -791,6 +909,8 @@ class ArenaBattleOrchestrator:
             "dtl_enabled": dtl_enabled,
             "experiment_id": exp_id,
             "step_results": step_results,
+            "firewall_verdicts": firewall_verdicts,
+            "deception_verdicts": deception_verdicts,
             "authority_state": self.get_state()["authority_state"],
             "pqc_audit": pqc_audit,
             "pqc_tamper_tests": tamper,
@@ -801,5 +921,54 @@ class ArenaBattleOrchestrator:
             "adaptation_history": self.feedback_engine.get_adaptation_history(),
             "events": self.recorder.timeline(),
         }
+        round_summary["kill_chain"] = score_kill_chain_round(round_summary)
+        round_summary["risk"] = compute_unified_risk(round_summary)
+        self.round_history.append(round_summary["kill_chain"])
         self.last_round = round_summary
         return round_summary
+
+    # ----------------------------------------------------------- campaign
+
+    # Deliberately NOT the master-prompt narrative verbatim (a scripted
+    # "Round 3 blocked by Graph Sentinel" moment) - graph features are a
+    # training-time signal (see graph_sentinel/), not something the live
+    # single-authority arena evaluates per-transaction, and claiming
+    # otherwise here would misrepresent what this system actually does live.
+    # This default instead runs RAIL_SCOPE_VIOLATION three times back to
+    # back, which demonstrates something the live arena genuinely does: the
+    # full Blue escalation ladder (soft response -> capability quarantine ->
+    # mandate suspension) that Module 5 added, end to end in one call.
+    DEFAULT_CAMPAIGN: List[int] = [7, 7, 7]
+
+    async def run_campaign(
+        self,
+        round_numbers: Optional[List[int]] = None,
+        dtl_enabled: bool = True,
+        event_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        speed: float = 1.0,
+    ) -> Dict[str, Any]:
+        """
+        Runs a sequence of rounds back to back on THIS orchestrator (so
+        escalation state and round_history accumulate across them), and
+        returns each round's summary plus the session-level kill-chain
+        coverage rollup over just this campaign's rounds.
+        """
+        sequence = list(round_numbers) if round_numbers else list(self.DEFAULT_CAMPAIGN)
+        rounds: List[Dict[str, Any]] = []
+        for round_number in sequence:
+            result = await self.run_round_stream(
+                round_number=round_number, dtl_enabled=dtl_enabled,
+                event_callback=event_callback, speed=speed,
+            )
+            rounds.append(result)
+
+        return {
+            "round_numbers": sequence,
+            "rounds": rounds,
+            "kill_chain_coverage": kill_chain_coverage(
+                [r["kill_chain"] for r in rounds]
+            ),
+            "final_active_policy": _policy_name(
+                self.ledger.get_authority(AUTHORITY_ID).active_policy
+            ),
+        }

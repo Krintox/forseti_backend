@@ -355,9 +355,30 @@ _EVENT_TEMPLATES: Dict[str, Dict[str, str]] = {
     "ML_SCORE": {
         "team": "BLUE",
         "what": "The trained detector scored this transaction at {probability}.",
-        "how": "Gradient-boosted trees over 29 features spanning transaction, delegation, cross-rail, semantic and security groups.",
+        "how": "Gradient-boosted trees over 37 features spanning transaction, delegation, cross-rail, semantic, security and graph groups.",
         "why": "The model catches behavioural and semantic patterns that arithmetic alone misses.",
         "matters": "A low score on a split leg is expected and honest: alone, it genuinely looks ordinary.",
+    },
+    "INTENT_FIREWALL_VERDICT": {
+        "team": "BLUE",
+        "what": "The Intent Firewall reshaped this transaction's invariant proofs into one {verdict} verdict.",
+        "how": "Every proof the DTL already computed was mapped onto its authority dimension and combined into a single per-dimension drift score.",
+        "why": "A judge reasons about how far an action drifted from the grant on every axis at once, not which invariant code fired.",
+        "matters": "HARD_DRIFT means the action is outside the delegated authority in a way that must be blocked, not merely queried.",
+    },
+    "DECEPTION_LAB_VERDICT": {
+        "team": "BLUE",
+        "what": "The Deception Lab checked whether the agent itself was fed a false premise: {deception_verdict}.",
+        "how": "Four deterministic detectors re-derive ground truth from data no deception can touch, independent of the authority checks.",
+        "why": "An agent can be manipulated by a prompt injection, a poisoned tool result, a fabricated memory, or a self-issued escalation - none of which are authority violations by themselves.",
+        "matters": "Detection here never changes the authorization outcome; none of these fields are read by anything that decides one.",
+    },
+    "BLUE_ADAPTATION": {
+        "team": "BLUE",
+        "what": "The defence hardened its policy to {active_policy} after this containment.",
+        "how": "Response strength escalates with repetition: this is occurrence {violation_count} of this invariant this session.",
+        "why": "Reacting identically to the fifth repeat of an attack already contained four times is not really adapting.",
+        "matters": "A persistent attacker on the same dimension is met with an escalating response, not a fixed one.",
     },
     "POLICY_DECISION": {
         "team": "BLUE",
@@ -404,6 +425,11 @@ def deterministic_event_explanation(event: Dict[str, Any]) -> Dict[str, Any]:
         "invariant": str(p.get("invariant_code", "an authority invariant")),
         "probability": (f"{float(p['probability']) * 100:.1f}%"
                         if isinstance(p.get("probability"), (int, float)) else "an unavailable score"),
+        "verdict": str(p.get("verdict", "ALLOW")),
+        "deception_verdict": ("no deception detected" if p.get("verdict") != "DECEPTION_DETECTED"
+                              else f"{p.get('count', 0)} detection(s) found"),
+        "active_policy": str(p.get("active_policy", "STANDARD")),
+        "violation_count": str(p.get("violation_count", 1)),
     }
 
     # INVARIANT_VIOLATION can fire for any of the six authority dimensions
@@ -582,13 +608,22 @@ def write_incident_report(round_result: Dict[str, Any], events: List[Dict[str, A
                    "type": e.get("event_type"), "label": e.get("arrow_label")}
                   for e in events
                   if e.get("event_type") in ("ATTACK_STEP", "RAIL_APPROVED", "INVARIANT_VIOLATION",
-                                             "POLICY_DECISION", "PARTIAL_AUTH", "QUARANTINE", "PQC_SIGN")]
+                                             "INTENT_FIREWALL_VERDICT", "DECEPTION_LAB_VERDICT",
+                                             "POLICY_DECISION", "PARTIAL_AUTH", "QUARANTINE",
+                                             "BLUE_ADAPTATION", "PQC_SIGN")]
+
+    appendix = _incident_deterministic_appendix(round_result)
 
     user = (f"Strategy: {round_result.get('strategy')}\n"
             f"Contained: {round_result.get('detected')}   Winner: {round_result.get('winner')}\n"
             f"Delegated ceiling: INR {round_result.get('authority_state', {}).get('global_budget_ceiling', 0):,.2f}\n"
             f"Final exposure: INR {round_result.get('authority_state', {}).get('total_exposure_global', 0):,.2f}\n"
             f"Transactions: {len(steps)}\n"
+            f"Kill-chain stage: {appendix['kill_chain_stage']} ({appendix['kill_chain_stage_code']})\n"
+            f"Intent Firewall hard-drift detections: {appendix['intent_firewall_hard_drift_count']} "
+            f"(dimensions: {appendix['intent_firewall_violating_dimensions']})\n"
+            f"Deception Lab detections: {appendix['deception_lab_detection_count']} "
+            f"(types: {appendix['deception_lab_types']})\n"
             f"Per-step outcomes:\n{json.dumps([{k: s.get(k) for k in ('step', 'local_rail_verdict', 'dtl_defense_status', 'ml_probability', 'containment')} for s in steps], indent=2, default=str)[:1500]}\n"
             f"Event timeline:\n{json.dumps(key_events, indent=2)[:1500]}")
 
@@ -608,7 +643,44 @@ def write_incident_report(round_result: Dict[str, Any], events: List[Dict[str, A
             "evidence_integrity": str(d.get("evidence_integrity") or "")[:400],
         }
 
-    return _run("incident_report", INCIDENT_SYSTEM, user, schema, validate=validate, max_tokens=1600)
+    env = _run("incident_report", INCIDENT_SYSTEM, user, schema, validate=validate, max_tokens=1600)
+    # Present regardless of whether the LLM answered - an incident report's
+    # FACTS must never depend on LLM availability, only its narrative prose
+    # does. Sourced directly from the round result, never from the model.
+    env["deterministic_appendix"] = appendix
+    return env
+
+
+def _incident_deterministic_appendix(round_result: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Cross-module facts the narrative sections above can reference, computed
+    directly from what Modules 1-3 already recorded for this round - not
+    re-derived, not asked of the model.
+    """
+    kill_chain = round_result.get("kill_chain") or {}
+    stage = kill_chain.get("stage") or {}
+    firewall = round_result.get("firewall_verdicts") or []
+    deception = round_result.get("deception_verdicts") or []
+
+    hard_drift = [v for v in firewall if v.get("verdict") == "HARD_DRIFT"]
+    detected_deception = [v for v in deception if v.get("verdict") == "DECEPTION_DETECTED"]
+
+    return {
+        "kill_chain_stage": stage.get("label"),
+        "kill_chain_stage_code": stage.get("code"),
+        "time_to_detection_ms": kill_chain.get("time_to_detection_ms"),
+        "economic_exposure_prevented_inr": kill_chain.get("economic_exposure_prevented_inr"),
+        "blast_radius_score": kill_chain.get("blast_radius_score"),
+        "attack_chain_score": kill_chain.get("attack_chain_score"),
+        "intent_firewall_hard_drift_count": len(hard_drift),
+        "intent_firewall_violating_dimensions": sorted({
+            dim for v in hard_drift for dim in v.get("violating_dimensions", [])
+        }),
+        "deception_lab_detection_count": len(detected_deception),
+        "deception_lab_types": sorted({
+            det["type"] for v in detected_deception for det in v.get("detections", [])
+        }),
+    }
 
 
 # =====================================================================
@@ -850,13 +922,35 @@ real outcome. Propose values worth testing, and say what you expect.
 CURRENCY: every amount is Indian Rupees. Write it as INR or the rupee sign. Never use dollars, pounds or euros."""
 
 
-def propose_counterfactual(question: str, round_result: Dict[str, Any]) -> Dict[str, Any]:
+def propose_counterfactual(
+    question: str,
+    round_result: Dict[str, Any],
+    available_dimensions: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
     Real problem: "would a lower limit have stopped this?" is the first question
     every risk committee asks, and it is normally answered by intuition.
+
+    `available_dimensions` restricts what the model may propose to what the
+    caller can actually replay honestly. Some vectors (RAIL_SCOPE_VIOLATION,
+    PER_TX_BREACH, LAPSED_MANDATE, BENEFICIARY_DRIFT, CONSTRAINT_EROSION) run
+    against a FIXED authority profile that IS the demonstration - a proposed
+    "what if the card rail had been disabled" for one of those would be
+    silently overwritten by that fixed profile at replay time and the answer
+    would misrepresent what was actually tested. Those rounds only ever offer
+    ["AMOUNT"]; everything else also offers RAIL and PURPOSE.
     """
+    dims = available_dimensions or ["AMOUNT"]
+    schema_shape: List[Dict[str, str]] = []
+    if "AMOUNT" in dims:
+        schema_shape.append({"dimension": "AMOUNT", "ceiling_inr": "number", "label": "string"})
+    if "RAIL" in dims:
+        schema_shape.append({"dimension": "RAIL",
+                              "disable_rail": "CARD_TOKEN | UPI_CIRCLE | AGENTIC_AP2", "label": "string"})
+    if "PURPOSE" in dims:
+        schema_shape.append({"dimension": "PURPOSE", "permit_gift_cards": "boolean", "label": "string"})
     schema = json.dumps({
-        "parameters_to_test": [{"ceiling_inr": "number", "label": "string"}],
+        "parameters_to_test": schema_shape,
         "hypothesis": "string",
         "what_to_watch": "string",
     }, indent=2)
@@ -866,19 +960,35 @@ def propose_counterfactual(question: str, round_result: Dict[str, Any]) -> Dict[
             f"Actual ceiling: INR {auth.get('global_budget_ceiling', 0):,.2f}\n"
             f"Actual final exposure: INR {auth.get('total_exposure_global', 0):,.2f}\n"
             f"Strategy: {round_result.get('strategy')}  Contained: {round_result.get('detected')}\n"
-            f"Legs: {json.dumps([s.get('tx', {}).get('amount') for s in round_result.get('step_results', [])])}")
+            f"Legs: {json.dumps([s.get('tx', {}).get('amount') for s in round_result.get('step_results', [])])}\n"
+            f"Dimensions you may propose parameters for THIS round: {dims}")
 
     def validate(d: Dict[str, Any]) -> Dict[str, Any]:
         params = []
         for p in (d.get("parameters_to_test") or [])[:5]:
-            try:
-                ceiling = float(p.get("ceiling_inr"))
-            except (TypeError, ValueError):
+            dimension = str(p.get("dimension") or "AMOUNT").upper()
+            if dimension not in dims:
                 continue
-            if ceiling > 0:
-                params.append({"ceiling_inr": round(ceiling, 2), "label": str(p.get("label") or "")[:80]})
+            label = str(p.get("label") or "")[:80]
+            if dimension == "AMOUNT":
+                try:
+                    ceiling = float(p.get("ceiling_inr"))
+                except (TypeError, ValueError):
+                    continue
+                if ceiling > 0:
+                    params.append({"dimension": "AMOUNT", "ceiling_inr": round(ceiling, 2), "label": label})
+            elif dimension == "RAIL":
+                rail = str(p.get("disable_rail") or "").upper()
+                if rail in ("CARD_TOKEN", "UPI_CIRCLE", "AGENTIC_AP2"):
+                    params.append({"dimension": "RAIL", "disable_rail": rail, "label": label})
+            elif dimension == "PURPOSE":
+                params.append({
+                    "dimension": "PURPOSE",
+                    "permit_gift_cards": bool(p.get("permit_gift_cards")),
+                    "label": label,
+                })
         if not params:
-            raise ValueError("no testable ceilings proposed")
+            raise ValueError("no testable parameters proposed within the allowed dimensions")
         return {
             "parameters_to_test": params,
             "hypothesis": str(d.get("hypothesis") or "")[:500],

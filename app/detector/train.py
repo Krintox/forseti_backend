@@ -108,7 +108,7 @@ def evaluate_scores(y_true, y_prob, amounts, threshold: float = 0.5) -> Dict[str
 def environment_metadata(seed: int) -> Dict[str, Any]:
     """Captured so any run can be reproduced and audited."""
     versions: Dict[str, str] = {}
-    for mod in ("numpy", "pandas", "sklearn", "scipy", "xgboost", "lightgbm", "shap", "matplotlib"):
+    for mod in ("numpy", "pandas", "sklearn", "scipy", "xgboost", "lightgbm", "shap", "matplotlib", "networkx"):
         try:
             versions[mod] = __import__(mod).__version__
         except Exception:
@@ -118,7 +118,7 @@ def environment_metadata(seed: int) -> Dict[str, Any]:
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "package_versions": versions,
-        "feature_schema_version": "2.2.0",
+        "feature_schema_version": "2.3.0",
     }
 
 

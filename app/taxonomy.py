@@ -4,9 +4,9 @@ Attack taxonomy (the IDENTIFY layer).
 The markdown matrix in docs/taxonomy.md is the single source of truth; this
 module parses it into structured records and attaches implementation metadata.
 
-Six vectors are deeply implemented and executable. The remainder are research /
-identify-layer entries. `implemented` distinguishes them explicitly so nothing
-in the UI can imply we execute all 52.
+Fifteen vectors are deeply implemented and executable. The remainder are
+research / identify-layer entries. `implemented` distinguishes them
+explicitly so nothing in the UI can imply we execute all of them.
 """
 
 from __future__ import annotations
@@ -111,6 +111,58 @@ IMPLEMENTED: Dict[int, Dict[str, Any]] = {
         "key": "LAPSED_MANDATE",
         "module": "app.redteam.vectors.authority_scope.LapsedMandateVector",
         "defeated_by": "INV_06_AUTHORITY_EXPIRED",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    56: {
+        "key": "BENEFICIARY_DRIFT",
+        "module": "app.redteam.vectors.beneficiary_drift.BeneficiaryDriftVector",
+        "defeated_by": "INV_07_UNAUTHORIZED_BENEFICIARY",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    # Deception Lab (Module 2): attacks on the AGENT'S OWN REASONING rather
+    # than on delegated authority. "defeated_by" names the deception_lab
+    # detector, not an INV_ code - these are a parallel concern to the DTL
+    # invariants, not another row in the same table.
+    57: {
+        "key": "PROMPT_INJECTION",
+        "module": "app.redteam.vectors.deception.PromptInjectionVector",
+        "defeated_by": "DECEPTION_LAB:PROMPT_INJECTION",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    58: {
+        "key": "TOOL_OUTPUT_POISONING",
+        "module": "app.redteam.vectors.deception.ToolOutputPoisoningVector",
+        "defeated_by": "DECEPTION_LAB:TOOL_OUTPUT_POISONING",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    59: {
+        "key": "CONTEXT_MEMORY_POISONING",
+        "module": "app.redteam.vectors.deception.ContextPoisoningVector",
+        "defeated_by": "DECEPTION_LAB:CONTEXT_MEMORY_POISONING",
+        "severity": "CRITICAL",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    60: {
+        "key": "AUTHORITY_IMPERSONATION",
+        "module": "app.redteam.vectors.deception.AuthorityImpersonationVector",
+        "defeated_by": "DECEPTION_LAB:AUTHORITY_IMPERSONATION",
+        "severity": "CRITICAL",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    61: {
+        "key": "CONSTRAINT_EROSION",
+        "module": "app.redteam.vectors.constraint_erosion.ConstraintErosionVector",
+        "defeated_by": "INV_02_SEMANTIC_INTENT_DRIFT",
         "severity": "HIGH",
         "agentic_relevance": "HIGH",
         "flagship": False,

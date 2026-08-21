@@ -25,6 +25,7 @@ class DefensePolicy(str, Enum):
     TIGHTENED_HEADROOM_V2 = "TIGHTENED_HEADROOM_V2" # Blue policy tightened headroom
     STRICT_CATALOG_ATTESTATION = "STRICT_CATALOG_ATTESTATION" # Strict SKU verification
     STEP_UP_VERIFICATION = "STEP_UP_VERIFICATION" # Step-up biometric check
+    AGENT_SUSPENDED = "AGENT_SUSPENDED" # Mandate paused pending re-consent after repeated offenses
 
 class AuthorityDimension(str, Enum):
     """
@@ -40,6 +41,7 @@ class AuthorityDimension(str, Enum):
     MERCHANT = "MERCHANT"    # merchant category scope (MCC)
     PURPOSE = "PURPOSE"      # economic substance of the basket
     TIME = "TIME"            # validity window of the delegation
+    BENEFICIARY = "BENEFICIARY"  # who the money may ultimately settle to
 
 
 class DTLGlobalAuthorityState(BaseModel):
@@ -74,6 +76,10 @@ class DTLGlobalAuthorityState(BaseModel):
     per_transaction_cap: Optional[float] = None   # None = no per-transaction limit
     validity_window_hours: float = 168.0          # 7 days, the default grocery grant
     economic_purpose: str = "Household groceries and consumables"
+    # Empty = unconstrained (any beneficiary), matching permitted_mccs' convention
+    # below. Populated for grants like bill payments, where the human authorised
+    # money to move to ONE specific counterparty, not merely a merchant category.
+    beneficiary_scope: List[str] = Field(default_factory=list)
 
     active_delegations_by_rail: Dict[PaymentRailType, float] = Field(default_factory=lambda: {
         PaymentRailType.CARD_TOKEN: 10000.0,
@@ -137,6 +143,12 @@ class DTLGlobalAuthorityState(BaseModel):
     def allows_rail(self, rail: Any) -> bool:
         return str(getattr(rail, "value", rail)) in self.permitted_rail_values
 
+    def allows_beneficiary(self, beneficiary: Optional[str]) -> bool:
+        """Unconstrained grants (empty scope) allow any/no beneficiary marker."""
+        if not self.beneficiary_scope:
+            return True
+        return beneficiary is not None and beneficiary in self.beneficiary_scope
+
     def authority_vector(self, now: Optional[datetime] = None) -> Dict[str, Any]:
         """
         The full grant, one entry per dimension. This is what the UI renders and
@@ -190,6 +202,13 @@ class DTLGlobalAuthorityState(BaseModel):
                 "expired": self.is_expired(ref),
                 "invariant": "INV_06_AUTHORITY_EXPIRED",
                 "label": "Validity window of the delegation",
+            },
+            "BENEFICIARY": {
+                "dimension": AuthorityDimension.BENEFICIARY.value,
+                "granted": list(self.beneficiary_scope),
+                "invariant": "INV_07_UNAUTHORIZED_BENEFICIARY",
+                "label": "Who the money may ultimately settle to",
+                "unconstrained": not self.beneficiary_scope,
             },
         }
 

@@ -22,6 +22,11 @@ lightgbm>=4.0.0
 # "model_feature_contribution" and are NEVER presented as SHAP.
 shap>=0.44.0
 
+# Payment Graph Sentinel: PageRank, betweenness centrality, Louvain community
+# detection over the agent/merchant/device entity graph. networkx>=3.0 ships
+# louvain_communities natively - no separate community-detection package needed.
+networkx>=3.0
+
 # NIST FIPS 204 ML-DSA-44. dilithium-py is a pure-Python implementation of the
 # standard and needs no native toolchain. liboqs-python may be used instead by
 # setting FORSETI_TRY_LIBOQS=1 (it requires cmake + the liboqs shared library).

@@ -182,7 +182,9 @@ class TestDimensionInteraction:
     def test_registry_covers_every_dimension_exactly_once(self):
         rows = DTLInvariantEngine.registry()
         dims = [r["dimension"] for r in rows]
-        assert sorted(dims) == sorted(["TIME", "RAIL", "PER_TX", "MERCHANT", "PURPOSE", "AMOUNT"])
+        assert sorted(dims) == sorted(
+            ["TIME", "RAIL", "PER_TX", "MERCHANT", "PURPOSE", "AMOUNT", "BENEFICIARY"]
+        )
         assert len(rows) == len(set(r["code"] for r in rows))
 
     def test_default_grant_is_unconstrained_on_the_new_dimensions(self):
@@ -202,7 +204,7 @@ class TestAuthorityVector:
     def test_vector_exposes_one_row_per_dimension_with_its_invariant(self):
         auth = DTLLedger().get_authority(AUTHORITY_ID)
         vector = auth.authority_vector()
-        assert set(vector) == {"AMOUNT", "PER_TX", "RAIL", "MERCHANT", "PURPOSE", "TIME"}
+        assert set(vector) == {"AMOUNT", "PER_TX", "RAIL", "MERCHANT", "PURPOSE", "TIME", "BENEFICIARY"}
         assert vector["AMOUNT"]["invariant"] == "INV_01_GLOBAL_BUDGET_EXCEEDED"
         assert vector["RAIL"]["invariant"] == "INV_04_UNAUTHORIZED_RAIL"
         assert vector["TIME"]["expired"] is False

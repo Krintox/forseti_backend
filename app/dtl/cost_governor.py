@@ -14,6 +14,8 @@ restores the grant, and the response depends on WHICH dimension was violated:
                          rails stay usable
     MERCHANT (INV_03) -> scope quarantine to a shadow ledger
     TIME     (INV_06) -> hold pending re-consent
+    BENEFICIARY (INV_07) -> counterparty-scope block: nothing is booked, the
+                         delegation for OTHER beneficiaries stays usable
 
 Only the AMOUNT and PURPOSE paths book money. Scope violations consume no
 authority at all, which is the point: the agent keeps its remaining grant and
@@ -93,6 +95,23 @@ class AdversarialCostGovernor:
                 f"merchants continue to clear normally."
             )
             auth.active_policy = DefensePolicy.STRICT_CATALOG_ATTESTATION
+            return tx, tx.containment_action
+
+        # ---------------------------------------------- BENEFICIARY violation
+        # Rail, amount and merchant category can all be in scope; only the
+        # settlement counterparty is not who the grant named. Like the RAIL
+        # branch above, nothing is booked - authorised beneficiaries stay
+        # fully usable and no headroom is consumed.
+        if code == "INV_07_UNAUTHORIZED_BENEFICIARY":
+            tx.state = TransactionState.QUARANTINED
+            scope = ", ".join(auth.beneficiary_scope) or "none"
+            tx.containment_action = (
+                f"BENEFICIARY_SCOPE_BLOCK: ₹{tx.amount:,.2f} to "
+                f"{tx.vpa_delegate or 'an unrecorded beneficiary'} refused - that counterparty is "
+                f"outside the delegation. Authorised beneficiaries ({scope}) remain fully usable and "
+                f"no headroom was consumed."
+            )
+            auth.active_policy = DefensePolicy.STRICT_INVARIANT
             return tx, tx.containment_action
 
         # --------------------------------- PURPOSE drift: split the basket

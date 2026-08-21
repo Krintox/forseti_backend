@@ -34,6 +34,8 @@ from .paths import (
     ensure_dirs,
 )
 from .ai.routes import register as register_ai_routes
+from .kill_chain import KILL_CHAIN_STAGES
+from .kill_chain import coverage as kill_chain_coverage
 from .models.state import PaymentRailType
 from .taxonomy import TAXONOMY, taxonomy_summary
 
@@ -137,6 +139,12 @@ class RoundRequest(BaseModel):
     strategy: Optional[str] = None
 
 
+class CampaignRequest(BaseModel):
+    round_numbers: Optional[List[int]] = None
+    dtl_enabled: bool = True
+    speed: float = 1.0
+
+
 class LimitRequest(BaseModel):
     delegated_limit: float
 
@@ -157,6 +165,7 @@ class AuthorityScopeRequest(BaseModel):
     permitted_mccs: Optional[List[str]] = None
     validity_window_hours: Optional[float] = None
     economic_purpose: Optional[str] = None
+    beneficiary_scope: Optional[List[str]] = None
 
 
 class PQCVerifyRequest(BaseModel):
@@ -267,6 +276,58 @@ def get_authority_vector() -> Dict[str, Any]:
     return {"authority_vector": state["authority_vector"], "invariant_registry": state["invariant_registry"]}
 
 
+@app.get("/api/arena/intent-firewall")
+def get_intent_firewall_verdicts() -> Dict[str, Any]:
+    """
+    Per-transaction drift vectors + ALLOW/PARTIAL_DRIFT/HARD_DRIFT verdicts
+    from the most recently completed round. Empty until a round has run.
+    """
+    verdicts = orchestrator.last_firewall_verdicts
+    hard = sum(1 for v in verdicts if v.get("verdict") == "HARD_DRIFT")
+    partial = sum(1 for v in verdicts if v.get("verdict") == "PARTIAL_DRIFT")
+    return {
+        "verdicts": verdicts,
+        "count": len(verdicts),
+        "hard_drift_count": hard,
+        "partial_drift_count": partial,
+        "allow_count": len(verdicts) - hard - partial,
+    }
+
+
+@app.get("/api/arena/deception-lab")
+def get_deception_lab_verdicts() -> Dict[str, Any]:
+    """
+    Per-transaction Deception Lab detections from the most recently completed
+    round. These target the AGENT's reasoning (prompt injection, tool-output
+    poisoning, context poisoning, authority impersonation), not the delegated
+    authority ledger - a transaction can be CLEAN here yet still violate the
+    grant (see /api/arena/intent-firewall), or vice versa.
+    """
+    verdicts = orchestrator.last_deception_verdicts
+    detected = sum(1 for v in verdicts if v.get("verdict") == "DECEPTION_DETECTED")
+    return {
+        "verdicts": verdicts,
+        "count": len(verdicts),
+        "detected_count": detected,
+        "clean_count": len(verdicts) - detected,
+    }
+
+
+@app.get("/api/arena/kill-chain")
+def get_kill_chain() -> Dict[str, Any]:
+    """
+    The 11-stage lifecycle taxonomy, the last round's score against it, and
+    this session's cumulative stage coverage across every round run since the
+    last reset.
+    """
+    last = orchestrator.last_round.get("kill_chain") if orchestrator.last_round else None
+    return {
+        "stages": KILL_CHAIN_STAGES,
+        "last_round": last,
+        "session_coverage": kill_chain_coverage(orchestrator.round_history),
+    }
+
+
 @app.post("/api/arena/reset")
 def reset_arena(req: Optional[ResetRequest] = None) -> Dict[str, Any]:
     budget = req.delegated_limit if req and req.delegated_limit is not None else None
@@ -304,6 +365,25 @@ async def execute_arena_round(req: RoundRequest) -> Dict[str, Any]:
     )
     await manager.broadcast(orchestrator.recorder.record(closing))
     return result
+
+
+@app.post("/api/arena/campaign")
+async def execute_arena_campaign(req: CampaignRequest) -> Dict[str, Any]:
+    """
+    Runs a sequence of rounds back to back (default: RAIL_SCOPE_VIOLATION
+    three times), so the Blue escalation ladder and kill-chain coverage are
+    visible across a whole campaign, not just one round. Events for every
+    round in the sequence stream over the same WebSocket as /api/arena/round.
+    """
+    async def stream_cb(event_data: Dict[str, Any]) -> None:
+        await manager.broadcast(event_data)
+
+    return await orchestrator.run_campaign(
+        round_numbers=req.round_numbers,
+        dtl_enabled=req.dtl_enabled,
+        event_callback=stream_cb,
+        speed=req.speed,
+    )
 
 
 @app.get("/api/arena/events")

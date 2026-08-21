@@ -34,15 +34,29 @@ def _without(*groups: str) -> List[str]:
     return [f for f in ALL_FEATURE_NAMES if f not in drop]
 
 
+def _only(*groups: str) -> List[str]:
+    keep = {f for g in groups for f in FEATURE_GROUPS[g]}
+    return [f for f in ALL_FEATURE_NAMES if f in keep]
+
+
 def build_variants() -> List[Dict[str, Any]]:
-    """The six required ablation variants."""
+    """
+    The six original ablation variants, plus H/I: the specific "Raw Only /
+    Raw+DTL / Raw+DTL+Graph / Full Hybrid" progression the Graph Sentinel
+    module is measured against. F already covers Raw Only and A already
+    covers Full Hybrid, so only the two intermediate points needed adding.
+    """
     return [
-        {"id": "A_all_features", "name": "A: all features", "features": list(ALL_FEATURE_NAMES)},
+        {"id": "A_all_features", "name": "A: all features (Full Hybrid)", "features": list(ALL_FEATURE_NAMES)},
         {"id": "B_no_dtl", "name": "B: remove DTL (delegation + cross-rail)", "features": _without(*DTL_ONLY_GROUPS)},
         {"id": "C_no_semantic", "name": "C: remove semantic", "features": _without("semantic")},
         {"id": "D_no_cross_rail", "name": "D: remove cross-rail", "features": _without("cross_rail")},
         {"id": "E_no_delegation", "name": "E: remove delegation", "features": _without("delegation")},
-        {"id": "F_raw_only", "name": "F: raw transaction features only", "features": list(FEATURE_GROUPS["raw_transaction"])},
+        {"id": "F_raw_only", "name": "F: raw transaction features only (Raw Only)", "features": list(FEATURE_GROUPS["raw_transaction"])},
+        {"id": "G_no_graph", "name": "G: remove graph", "features": _without("graph")},
+        {"id": "H_raw_plus_dtl", "name": "H: raw + DTL only (Raw+DTL)", "features": _only("raw_transaction", *DTL_ONLY_GROUPS)},
+        {"id": "I_raw_plus_dtl_plus_graph", "name": "I: raw + DTL + graph (Raw+DTL+Graph)",
+         "features": _only("raw_transaction", *DTL_ONLY_GROUPS, "graph")},
     ]
 
 
@@ -113,6 +127,18 @@ def run_ablation_experiments(
     }
     print(f"\n  measured DTL feature lift: {results['measured_dtl_feature_lift']['lift']:+.4f} PR-AUC "
           f"({results['measured_dtl_feature_lift']['relative_lift_pct']:+.2f}%)")
+
+    raw_dtl = results["variants"]["H_raw_plus_dtl"]["pr_auc"]
+    raw_dtl_graph = results["variants"]["I_raw_plus_dtl_plus_graph"]["pr_auc"]
+    results["measured_graph_feature_lift"] = {
+        "definition": "PR-AUC(I: raw+DTL+graph) - PR-AUC(H: raw+DTL only)",
+        "pr_auc_raw_plus_dtl": raw_dtl,
+        "pr_auc_raw_plus_dtl_plus_graph": raw_dtl_graph,
+        "lift": round(raw_dtl_graph - raw_dtl, 4),
+        "relative_lift_pct": round(((raw_dtl_graph - raw_dtl) / raw_dtl * 100.0) if raw_dtl > 0 else 0.0, 2),
+    }
+    print(f"  measured graph feature lift: {results['measured_graph_feature_lift']['lift']:+.4f} PR-AUC "
+          f"({results['measured_graph_feature_lift']['relative_lift_pct']:+.2f}%)")
 
     from ..paths import EVALUATION_DIR
 
