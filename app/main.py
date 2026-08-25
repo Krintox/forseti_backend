@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -20,9 +21,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .arena.events import Actor, ArenaEvent, EventRecorder, EventType
-from .arena.orchestrator import ArenaBattleOrchestrator
+from .arena.orchestrator import AUTHORITY_ID, ArenaBattleOrchestrator
 from .crypto.mldsa_audit import PQCDelegationAuditModule
 from .demo_runner import run_live_demo
+from .models.transactions import CartItem, SyntheticTransaction
 from .paths import (
     ABLATION_PATH,
     BASELINES_PATH,
@@ -38,6 +40,7 @@ from .kill_chain import KILL_CHAIN_STAGES
 from .kill_chain import coverage as kill_chain_coverage
 from .models.state import PaymentRailType
 from .taxonomy import TAXONOMY, taxonomy_summary
+from .tokenization import TokenStore, activate, check_and_expire, issue_token, revoke, use_token
 
 app = FastAPI(
     title="FORSETI Defense Lab API",
@@ -56,6 +59,7 @@ app.add_middleware(
 ensure_dirs()
 orchestrator = ArenaBattleOrchestrator()
 pqc_module = PQCDelegationAuditModule()
+token_store = TokenStore()
 
 # AI agent layer. Advisory only - never in the enforcement path.
 register_ai_routes(app, orchestrator)
@@ -171,6 +175,31 @@ class AuthorityScopeRequest(BaseModel):
 class PQCVerifyRequest(BaseModel):
     snapshot_payload: Dict[str, Any]
     signature_hex: Optional[str] = None
+
+
+class TokenIssueRequest(BaseModel):
+    agent_id: str = "agent_household_butler"
+    principal_id: str = "user_household_principal"
+    scope: str = "Household groceries and consumables"
+    validity_hours: float = 24.0
+    amount_ceiling: Optional[float] = None
+    per_transaction_limit: Optional[float] = None
+    allowed_rails: Optional[List[str]] = None
+    merchant_scope: Optional[List[str]] = None
+    purpose_scope: Optional[str] = None
+
+
+class TokenRevokeRequest(BaseModel):
+    reason: str = "REVOKED_BY_PRINCIPAL"
+
+
+class TokenUseRequest(BaseModel):
+    rail: str
+    amount: float
+    merchant_id: str = "merch_probe"
+    merchant_name: str = "Probe Merchant"
+    merchant_mcc: str = "5411"
+    category: str = "GROCERY"
 
 
 def load_artifact(path: str) -> Dict[str, Any]:
@@ -431,6 +460,89 @@ def get_replay(experiment_id: str) -> Dict[str, Any]:
 @app.post("/api/demo/start")
 def start_live_demo() -> Dict[str, Any]:
     return run_live_demo()
+
+
+# --------------------------------------------------------- tokenization
+#
+# Synthetic scoped-token model demonstrating how a tokenized payment
+# credential inherits and enforces delegated authority - NOT a real network
+# token vault (see app/tokenization/lifecycle.py). A token's own scope is
+# clamped to the live DTL authority at issuance, and every use is
+# independently re-checked against that authority's CURRENT state:
+#
+#     TOKEN SCOPE  ->  DTL AUTHORITY  ->  PAYMENT ACTION
+
+
+@app.post("/api/tokens/issue")
+def issue_payment_token(req: TokenIssueRequest) -> Dict[str, Any]:
+    auth = orchestrator.ledger.get_authority(AUTHORITY_ID)
+    allowed_rails = None
+    if req.allowed_rails:
+        allowed_rails = [PaymentRailType(r) for r in req.allowed_rails]
+    token = issue_token(
+        auth,
+        agent_id=req.agent_id, principal_id=req.principal_id, scope=req.scope,
+        validity_hours=req.validity_hours, amount_ceiling=req.amount_ceiling,
+        per_transaction_limit=req.per_transaction_limit,
+        allowed_rails=allowed_rails, merchant_scope=req.merchant_scope,
+        purpose_scope=req.purpose_scope,
+    )
+    activate(token)
+    token_store.add(token)
+    return {"status": "ISSUED", "token": json.loads(token.model_dump_json())}
+
+
+@app.get("/api/tokens")
+def list_payment_tokens() -> Dict[str, Any]:
+    tokens = [check_and_expire(t) for t in token_store.list()]
+    return {"tokens": [json.loads(t.model_dump_json()) for t in tokens]}
+
+
+@app.get("/api/tokens/{token_id}")
+def get_payment_token(token_id: str) -> Dict[str, Any]:
+    token = token_store.get(token_id)
+    if token is None:
+        return {"status": "NOT_FOUND", "token_id": token_id}
+    check_and_expire(token)
+    return {"status": "FOUND", "token": json.loads(token.model_dump_json())}
+
+
+@app.post("/api/tokens/{token_id}/revoke")
+def revoke_payment_token(token_id: str, req: TokenRevokeRequest) -> Dict[str, Any]:
+    token = token_store.get(token_id)
+    if token is None:
+        return {"status": "NOT_FOUND", "token_id": token_id}
+    revoke(token, req.reason)
+    return {"status": "REVOKED", "token": json.loads(token.model_dump_json())}
+
+
+@app.post("/api/tokens/{token_id}/use")
+def use_payment_token(token_id: str, req: TokenUseRequest) -> Dict[str, Any]:
+    """
+    Tests a hypothetical transaction against a token's scope AND the live DTL
+    authority behind it - the demo surface for TOKEN SCOPE -> DTL AUTHORITY ->
+    PAYMENT ACTION. Nothing here books real exposure against the arena; a
+    successful use only advances the TOKEN's own cumulative_used/status.
+    """
+    token = token_store.get(token_id)
+    if token is None:
+        return {"status": "NOT_FOUND", "token_id": token_id}
+    auth = orchestrator.ledger.get_authority(AUTHORITY_ID)
+    tx = SyntheticTransaction(
+        tx_id=f"tx_token_probe_{uuid.uuid4().hex[:8]}",
+        authority_id=auth.authority_id, agent_id=token.agent_id,
+        rail=PaymentRailType(req.rail), amount=req.amount,
+        merchant_id=req.merchant_id, merchant_name=req.merchant_name, merchant_mcc=req.merchant_mcc,
+        items=[CartItem(sku="SKU_PROBE", name="Probe item", category=req.category,
+                         unit_price=req.amount, quantity=1)],
+    )
+    ok, violation = use_token(token, auth, tx)
+    return {
+        "status": "ALLOWED" if ok else "TOKEN_SCOPE_VIOLATION",
+        "ok": ok,
+        "violation": json.loads(violation.model_dump_json()) if violation else None,
+        "token": json.loads(token.model_dump_json()),
+    }
 
 
 # ------------------------------------------------------------- evaluation

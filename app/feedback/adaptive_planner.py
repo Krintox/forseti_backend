@@ -146,6 +146,25 @@ STRATEGY_PROFILE: Dict[str, Dict[str, Any]] = {
         "target_rails": ["UPI_CIRCLE", "CARD_TOKEN", "AGENTIC_AP2"],
         "base_prior": 0.65,
     },
+    # Settlement Reconciliation (app/settlement/): post-authorization
+    # lifecycle attacks, not a DTL invariant or a Deception Lab detection -
+    # "defeated_by" names the RECON_ conflict code, same convention as above.
+    "SETTLEMENT_CONFLICT": {
+        "round": 16,
+        "needs_headroom": False,
+        "exploits": "One obligation is captured on one rail and refunded on a different rail - individually valid, inconsistent afterwards.",
+        "defeated_by": "RECONCILIATION:RECON_01_SETTLEMENT_CONFLICT",
+        "target_rails": ["CARD_TOKEN", "UPI_CIRCLE"],
+        "base_prior": 0.5,
+    },
+    "RECONCILIATION_DRIFT": {
+        "round": 17,
+        "needs_headroom": False,
+        "exploits": "A settlement message for one obligation is applied twice on the same rail - a duplicated/replayed event.",
+        "defeated_by": "RECONCILIATION:RECON_02_RECONCILIATION_DRIFT",
+        "target_rails": ["CARD_TOKEN"],
+        "base_prior": 0.5,
+    },
 }
 
 

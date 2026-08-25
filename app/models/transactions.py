@@ -76,3 +76,12 @@ class SyntheticTransaction(BaseModel):
     # separate principal in the loop.
     self_approved: bool = False
     approving_agent_id: Optional[str] = None
+
+    # ---- Settlement Reconciliation: fields modelling the post-authorization
+    # lifecycle (see app/settlement/). Two legs sharing an obligation_id model
+    # ONE authorised economic obligation whose settlement is attempted more
+    # than once - the failure mode a per-transaction DTL invariant cannot see,
+    # because each leg is evaluated (and authorised) independently and
+    # correctly at the time it is presented.
+    obligation_id: Optional[str] = None
+    settlement_action: Optional[str] = None  # CAPTURE | REFUND | DUPLICATE_CAPTURE

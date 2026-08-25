@@ -1207,7 +1207,7 @@ SYSTEM_HIERARCHY = {
         "name": "Delegation-Trust Ledger (DTL)",
         "claim": "A delegated agent may act only within the authority a human granted, "
                  "and that authority is multidimensional - amount, per-transaction size, "
-                 "rail, merchant scope, economic purpose and validity window.",
+                 "rail, merchant scope, beneficiary, economic purpose and validity window.",
         "why_novel": "Payment rails each enforce their own local limits. No rail can see the "
                      "others, and none of them holds the non-monetary dimensions of the grant "
                      "at all. The DTL is the only component that evaluates the whole grant.",
@@ -1218,7 +1218,7 @@ SYSTEM_HIERARCHY = {
          "role": "Generates adversarial transactions targeting one authority dimension at a time.",
          "module": "app/redteam/"},
         {"layer": "DEFENSE", "component": "DTL Invariant Engine",
-         "role": "Six deterministic invariants, one per authority dimension. No ML, no training data.",
+         "role": "Seven deterministic invariants, one per authority dimension. No ML, no training data.",
          "module": "app/dtl/invariant_engine.py"},
         {"layer": "DEFENSE", "component": "Cost Governor",
          "role": "Proportionate containment chosen by which dimension failed - never a blanket block.",

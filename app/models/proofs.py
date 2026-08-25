@@ -60,6 +60,33 @@ class DeceptionProof(BaseModel):
     explanation: str
 
 
+class SettlementReconciliationProof(BaseModel):
+    """
+    Evidence of a post-authorization lifecycle failure: two settlement legs
+    that are each individually plausible produce an inconsistent picture of
+    the SAME authorised obligation. Distinct from SemanticDriftProof (which
+    says "this action was outside the grant BEFORE it was authorised") and
+    from DeceptionProof (which says "the agent's own reasoning was fed a
+    false premise") - this says "the delegation was respected at
+    authorization time, and the books still do not agree afterwards."
+    """
+    proof_id: str
+    authority_id: str
+    obligation_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+    conflict_code: str  # RECON_01_SETTLEMENT_CONFLICT | RECON_02_RECONCILIATION_DRIFT
+    kill_chain_stage: str  # SETTLEMENT_CONFLICT | RECONCILIATION_DRIFT
+    severity: str = "HIGH"
+
+    leg_tx_ids: List[str]
+    leg_summary: str
+    canonical_expectation: str
+    observed_mismatch: str
+    economic_exposure_at_risk: float
+    explanation: str
+
+
 class StateConsistencyProof(BaseModel):
     proof_id: str
     authority_id: str

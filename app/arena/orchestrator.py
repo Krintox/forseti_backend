@@ -57,6 +57,10 @@ from ..redteam.vectors.other_vectors import (
     ScopeCreepVector,
     VelocitySpikeVector,
 )
+from ..redteam.vectors.reconciliation_drift import ReconciliationDriftVector
+from ..redteam.vectors.settlement_conflict import SettlementConflictVector
+from ..settlement import apply_settlement_containment
+from ..settlement import evaluate_all as evaluate_settlement
 from ..simulator.state_machine import PaymentSimulatorEngine
 from .events import RAIL_TO_ACTOR, Actor, ArenaEvent, EventRecorder, EventType
 
@@ -82,6 +86,8 @@ STRATEGY_BY_ROUND = {
     13: "CONTEXT_MEMORY_POISONING",
     14: "AUTHORITY_IMPERSONATION",
     15: "CONSTRAINT_EROSION",
+    16: "SETTLEMENT_CONFLICT",
+    17: "RECONCILIATION_DRIFT",
 }
 
 STRATEGY_NARRATIVE = {
@@ -100,6 +106,8 @@ STRATEGY_NARRATIVE = {
     "CONTEXT_MEMORY_POISONING": "The agent's own context claims a stale, more permissive authorization than the live grant.",
     "AUTHORITY_IMPERSONATION": "A sub-agent records itself as the approver of its own authority escalation.",
     "CONSTRAINT_EROSION": "Spread purpose drift across four escalating legs instead of one obvious spike.",
+    "SETTLEMENT_CONFLICT": "One authorised obligation is captured on one rail and refunded on a different rail - individually valid, but inconsistent post-authorization.",
+    "RECONCILIATION_DRIFT": "A settlement message for one authorised obligation is applied twice on the same rail - a duplicated/replayed settlement event.",
 }
 
 # Which dimension of the delegated authority each vector is designed to attack.
@@ -130,6 +138,13 @@ STRATEGY_DIMENSION = {
     "CONTEXT_MEMORY_POISONING": "AGENT_INTEGRITY",
     "AUTHORITY_IMPERSONATION": "AGENT_INTEGRITY",
     "CONSTRAINT_EROSION": "PURPOSE",
+    # Settlement Reconciliation (app/settlement/): a THIRD display-only label,
+    # for the same reason AGENT_INTEGRITY exists above. These two vectors
+    # satisfy every one of the seven authority dimensions at authorization
+    # time - the failure is entirely post-authorization, so none of the seven
+    # values would be honest here either.
+    "SETTLEMENT_CONFLICT": "SETTLEMENT_INTEGRITY",
+    "RECONCILIATION_DRIFT": "SETTLEMENT_INTEGRITY",
 }
 
 # Vectors that only mean something against a specific grant. Running "UPI only"
@@ -142,6 +157,8 @@ STRATEGY_AUTHORITY_PROFILE = {
     "LAPSED_MANDATE": LapsedMandateVector.authority_profile,
     "BENEFICIARY_DRIFT": BeneficiaryDriftVector.authority_profile,
     "CONSTRAINT_EROSION": ConstraintErosionVector.authority_profile,
+    "SETTLEMENT_CONFLICT": SettlementConflictVector.authority_profile,
+    "RECONCILIATION_DRIFT": ReconciliationDriftVector.authority_profile,
 }
 
 
@@ -359,6 +376,8 @@ class ArenaBattleOrchestrator:
         "CONTEXT_MEMORY_POISONING": ContextPoisoningVector,
         "AUTHORITY_IMPERSONATION": AuthorityImpersonationVector,
         "CONSTRAINT_EROSION": ConstraintErosionVector,
+        "SETTLEMENT_CONFLICT": SettlementConflictVector,
+        "RECONCILIATION_DRIFT": ReconciliationDriftVector,
     }
 
     def _select_attack(self, strategy: str) -> List[SyntheticTransaction]:
@@ -581,7 +600,7 @@ class ArenaBattleOrchestrator:
                 await self._emit(event_callback, ev(
                     event_type=EventType.DTL_EVALUATION, actor=Actor.DTL, step=idx,
                     source="dtl", target="dtl",
-                    arrow_label=f"CHECKING ALL 6 AUTHORITY DIMENSIONS: Rs {projected:,.0f} / Rs {auth.global_budget_ceiling:,.0f}",
+                    arrow_label=f"CHECKING ALL 7 AUTHORITY DIMENSIONS: Rs {projected:,.0f} / Rs {auth.global_budget_ceiling:,.0f}",
                     severity="warning",
                     payload={
                         "exposure_before": round(exposure_before, 2),
@@ -792,6 +811,61 @@ class ArenaBattleOrchestrator:
                 "headroom_after": round(auth.authority_headroom, 2),
             })
 
+        # ---- Settlement Reconciliation: a THIRD parallel concern (see
+        # app/settlement/reconciliation.py), evaluated once over every leg of
+        # THIS round rather than per-transaction like the DTL invariants
+        # above. A settlement conflict or reconciliation drift is only
+        # visible when two legs of one obligation are compared against each
+        # other, which no single per-transaction check can do. Runs every
+        # round, not only for the two vectors that target it - CONSISTENT is
+        # a real verdict, the same honesty rule Deception Lab follows.
+        settlement_proofs = evaluate_settlement(auth, attacks)
+        if settlement_proofs:
+            settlement_proof = settlement_proofs[0]
+            settlement_containment = apply_settlement_containment(settlement_proof)
+            settlement_verdict = {
+                "verdict": "CONFLICT_DETECTED",
+                "conflict_code": settlement_proof.conflict_code,
+                "kill_chain_stage": settlement_proof.kill_chain_stage,
+                "obligation_id": settlement_proof.obligation_id,
+                "leg_tx_ids": settlement_proof.leg_tx_ids,
+                "leg_summary": settlement_proof.leg_summary,
+                "canonical_expectation": settlement_proof.canonical_expectation,
+                "observed_mismatch": settlement_proof.observed_mismatch,
+                "economic_exposure_at_risk": settlement_proof.economic_exposure_at_risk,
+                "explanation": settlement_proof.explanation,
+                "containment_action": settlement_containment,
+                "proof_id": settlement_proof.proof_id,
+            }
+            await self._emit(event_callback, ev(
+                event_type=EventType.SETTLEMENT_RECONCILIATION_VERDICT, actor=Actor.DTL,
+                source="dtl", target="cost_governor",
+                arrow_label=f"SETTLEMENT RECONCILIATION: {settlement_proof.conflict_code}",
+                severity="critical",
+                payload=settlement_verdict,
+            ), pause=0.5)
+            await self._emit(event_callback, ev(
+                event_type=EventType.POLICY_DECISION, actor=Actor.COST_GOVERNOR,
+                source="cost_governor", target="outcome",
+                arrow_label="RECONCILING WITHOUT FREEZING THE WHOLE OBLIGATION",
+                severity="success",
+                payload={
+                    "action": settlement_containment,
+                    "invariant_code": settlement_proof.conflict_code,
+                    "policy": _policy_name(auth.active_policy),
+                    "rationale": settlement_proof.explanation,
+                },
+            ), pause=0.5)
+        else:
+            settlement_verdict = {"verdict": "CONSISTENT", "conflict_code": None}
+            await self._emit(event_callback, ev(
+                event_type=EventType.SETTLEMENT_RECONCILIATION_VERDICT, actor=Actor.DTL,
+                source="dtl", target="dtl",
+                arrow_label="SETTLEMENT RECONCILIATION: CONSISTENT",
+                severity="success",
+                payload=settlement_verdict,
+            ), pause=0.3)
+
         # ---- cryptographic audit of the resulting DTL state
         # Sign the actual head of the event hash chain. Signing a placeholder
         # would produce a signature that commits to no history at all.
@@ -826,7 +900,8 @@ class ArenaBattleOrchestrator:
         ), pause=0.4)
 
         # ---- closed loop: red observes the defence and picks its next move
-        detected = last_proof is not None
+        settlement_detected = bool(settlement_proofs)
+        detected = last_proof is not None or settlement_detected
         blue_outcome = self.feedback_engine.record_round_outcome(
             round_id=round_number,
             strategy=strategy,
@@ -834,7 +909,11 @@ class ArenaBattleOrchestrator:
             attempted_amount=total_objective,
             is_detected=detected,
             detection_score=highest_ml_prob,
-            violating_invariant=last_proof.invariant_code if last_proof else None,
+            violating_invariant=(
+                last_proof.invariant_code if last_proof
+                else settlement_proofs[0].conflict_code if settlement_proofs
+                else None
+            ),
             defense_action="CONTAINED" if detected else "ALLOW",
             red_reasoning=f"Executed {strategy}",
             auth_state=auth,
@@ -860,7 +939,11 @@ class ArenaBattleOrchestrator:
                 severity="success",
                 payload={
                     "active_policy": _policy_name(auth.active_policy),
-                    "violating_invariant": last_proof.invariant_code if last_proof else None,
+                    "violating_invariant": (
+                        last_proof.invariant_code if last_proof
+                        else settlement_proofs[0].conflict_code if settlement_proofs
+                        else None
+                    ),
                     "violation_count": policy_changes.get("violation_count", 1),
                     "escalated": policy_changes.get("escalated", False),
                     "blue_adaptation_summary": blue_outcome.get("blue_adaptation_summary", ""),
@@ -911,6 +994,7 @@ class ArenaBattleOrchestrator:
             "step_results": step_results,
             "firewall_verdicts": firewall_verdicts,
             "deception_verdicts": deception_verdicts,
+            "settlement_verdict": settlement_verdict,
             "authority_state": self.get_state()["authority_state"],
             "pqc_audit": pqc_audit,
             "pqc_tamper_tests": tamper,

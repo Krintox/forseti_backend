@@ -4,7 +4,7 @@ Attack taxonomy (the IDENTIFY layer).
 The markdown matrix in docs/taxonomy.md is the single source of truth; this
 module parses it into structured records and attaches implementation metadata.
 
-Fifteen vectors are deeply implemented and executable. The remainder are
+Seventeen vectors are deeply implemented and executable. The remainder are
 research / identify-layer entries. `implemented` distinguishes them
 explicitly so nothing in the UI can imply we execute all of them.
 """
@@ -163,6 +163,26 @@ IMPLEMENTED: Dict[int, Dict[str, Any]] = {
         "key": "CONSTRAINT_EROSION",
         "module": "app.redteam.vectors.constraint_erosion.ConstraintErosionVector",
         "defeated_by": "INV_02_SEMANTIC_INTENT_DRIFT",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    # Settlement Reconciliation Engine (app.settlement/): post-authorization
+    # lifecycle attacks. Neither is a DTL invariant or a Deception Lab
+    # detection - "defeated_by" names the RECON_ conflict code these two
+    # Kill Chain stages (10, 11) previously had no implemented vector for.
+    62: {
+        "key": "SETTLEMENT_CONFLICT",
+        "module": "app.redteam.vectors.settlement_conflict.SettlementConflictVector",
+        "defeated_by": "RECONCILIATION:RECON_01_SETTLEMENT_CONFLICT",
+        "severity": "HIGH",
+        "agentic_relevance": "HIGH",
+        "flagship": False,
+    },
+    63: {
+        "key": "RECONCILIATION_DRIFT",
+        "module": "app.redteam.vectors.reconciliation_drift.ReconciliationDriftVector",
+        "defeated_by": "RECONCILIATION:RECON_02_RECONCILIATION_DRIFT",
         "severity": "HIGH",
         "agentic_relevance": "HIGH",
         "flagship": False,

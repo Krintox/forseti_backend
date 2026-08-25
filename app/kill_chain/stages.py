@@ -10,12 +10,13 @@ mapped to one stage, not several, for the same reason STRATEGY_DIMENSION in
 orchestrator.py assigns one authority dimension per vector: an honest map
 should be checkable, and "this vector touches 4 stages a little" is not.
 
-Two stages - SETTLEMENT_CONFLICT and RECONCILIATION_DRIFT - have no
-implemented vector behind them yet (all 15 currently-implemented vectors map
-onto the other 9; CONSTRAINT_EROSION fills what was previously the
-unmapped GOAL_HIJACKING stage). That is reported honestly by `coverage()`
-rather than papered over with an approximate vector; building real vectors
-for those two stages is tracked as follow-up work, not done here.
+All 11 stages now have an implemented vector behind them. The last two -
+SETTLEMENT_CONFLICT and RECONCILIATION_DRIFT - are deliberately NOT DTL
+invariants or Deception Lab detections: they are post-authorization lifecycle
+failures (see app/settlement/reconciliation.py), where every authority
+dimension was satisfied at authorization time and the failure only appears in
+the disagreement between settlement legs afterwards. CONSTRAINT_EROSION fills
+what was previously the unmapped GOAL_HIJACKING stage.
 """
 
 from __future__ import annotations
@@ -77,8 +78,8 @@ STRATEGY_TO_STAGE: Dict[str, str] = {
     "VELOCITY_BURST": "AUTHORITY_BYPASS",
     "CROSS_RAIL_SPLIT": "CROSS_RAIL_SPLIT",
     "CONSTRAINT_EROSION": "GOAL_HIJACKING",
-    # SETTLEMENT_CONFLICT, RECONCILIATION_DRIFT: no implemented vector maps
-    # here yet.
+    "SETTLEMENT_CONFLICT": "SETTLEMENT_CONFLICT",
+    "RECONCILIATION_DRIFT": "RECONCILIATION_DRIFT",
 }
 
 

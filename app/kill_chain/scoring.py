@@ -58,6 +58,11 @@ def score_round(round_summary: Dict[str, Any]) -> Dict[str, Any]:
             events, "DECEPTION_LAB_VERDICT",
             predicate=lambda e: e.get("payload", {}).get("verdict") == "DECEPTION_DETECTED",
         )
+    if detected_at is None:
+        detected_at = _first_offset(
+            events, "SETTLEMENT_RECONCILIATION_VERDICT",
+            predicate=lambda e: e.get("payload", {}).get("verdict") == "CONFLICT_DETECTED",
+        )
     time_to_detection_ms = (
         round(detected_at - started_at, 3)
         if started_at is not None and detected_at is not None and detected_at >= started_at
@@ -67,6 +72,9 @@ def score_round(round_summary: Dict[str, Any]) -> Dict[str, Any]:
     economic_exposure_prevented_inr = round(sum(
         float(e.get("payload", {}).get("overshoot", 0.0) or 0.0)
         for e in events if e.get("event_type") == "INVARIANT_VIOLATION"
+    ) + sum(
+        float(e.get("payload", {}).get("economic_exposure_at_risk", 0.0) or 0.0)
+        for e in events if e.get("event_type") == "SETTLEMENT_RECONCILIATION_VERDICT"
     ), 2)
 
     rails_touched = {

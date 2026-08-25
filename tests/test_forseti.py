@@ -478,15 +478,16 @@ class TestArena:
 
 
 class TestTaxonomy:
-    def test_all_61_vectors_parse(self):
-        assert len(TAXONOMY) == 61
+    def test_all_63_vectors_parse(self):
+        assert len(TAXONOMY) == 63
 
     def test_implemented_vectors_are_marked_separately(self):
         summary = taxonomy_summary()
         # 6 original + 3 non-monetary authority dimensions + 1 BENEFICIARY
         # (Intent Firewall) + 4 Deception Lab (agent-reasoning) + 1
-        # Constraint Erosion (Adaptive Immune) vectors.
-        assert summary["implemented_count"] == 15
+        # Constraint Erosion (Adaptive Immune) + 2 Settlement Reconciliation
+        # (Settlement Conflict, Reconciliation Drift) vectors.
+        assert summary["implemented_count"] == 17
         assert summary["research_only_count"] == 46
         for v in TAXONOMY:
             if v["implemented"]:
