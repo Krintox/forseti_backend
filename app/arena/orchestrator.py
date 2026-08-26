@@ -25,6 +25,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from ..crypto.mldsa_audit import PQCDelegationAuditModule
 from ..detector.inference import HybridMLDetectorInference
 from ..dtl.cost_governor import AdversarialCostGovernor
+from ..dtl.delegation_chain import ChainViolation, DelegationChainRegistry, DelegationLink
 from ..dtl.invariant_engine import DTLInvariantEngine
 from ..dtl.ledger import DTLLedger
 from ..deception_lab import evaluate_all as evaluate_deception
@@ -33,7 +34,7 @@ from ..intent_firewall import firewall_decision
 from ..kill_chain import coverage as kill_chain_coverage
 from ..kill_chain import score_round as score_kill_chain_round
 from ..risk_engine import compute_unified_risk
-from ..models.state import DefensePolicy, DTLGlobalAuthorityState, PaymentRailType
+from ..models.state import DefensePolicy, DTLGlobalAuthorityState, PaymentRailType, POLICY_LADDER
 from ..models.transactions import SyntheticTransaction
 from ..paths import EVENTS_DIR
 from ..redteam.vectors.authority_scope import (
@@ -66,6 +67,13 @@ from .events import RAIL_TO_ACTOR, Actor, ArenaEvent, EventRecorder, EventType
 
 AUTHORITY_ID = "auth_household_grocery_2026"
 
+# Share of a captured amount that reaches final settlement within the round.
+# The remainder stays in `authorized`, modelling the real authorization ->
+# settlement lag (hours to days). Not tuned for any outcome: it exists so the
+# lifecycle has a visible in-between state rather than jumping straight to
+# settled, which is what makes the four-bucket breakdown meaningful.
+_SETTLEMENT_SHARE = 0.55
+
 # Hypothetical (counterfactual) rounds are persisted here rather than in the
 # main events directory, so they never pollute the replayable round list.
 SANDBOX_EVENTS_DIR = os.path.join(EVENTS_DIR, "_sandbox")
@@ -89,6 +97,10 @@ STRATEGY_BY_ROUND = {
     16: "SETTLEMENT_CONFLICT",
     17: "RECONCILIATION_DRIFT",
 }
+
+# Reverse of STRATEGY_BY_ROUND, so a strategy chosen by the ADAPTIVE planner
+# resolves back to a round number for event labelling.
+STRATEGY_TO_ROUND = {v: k for k, v in STRATEGY_BY_ROUND.items()}
 
 STRATEGY_NARRATIVE = {
     "CROSS_RAIL_SPLIT": "Split one over-budget objective across separate payment rails so no single rail sees a violation.",
@@ -172,6 +184,10 @@ class ArenaBattleOrchestrator:
     def __init__(self) -> None:
         self.simulator = PaymentSimulatorEngine()
         self.ledger = DTLLedger()
+        # Agent-to-agent delegation links (sub-delegation pools, four-eyes,
+        # attestation). Separate from the ledger: the ledger answers questions
+        # about an authority's exposure, this answers who inside it may act.
+        self.chain = DelegationChainRegistry()
         self.invariant_engine = DTLInvariantEngine()
         self.cost_governor = AdversarialCostGovernor()
         self.detector = HybridMLDetectorInference()
@@ -194,6 +210,8 @@ class ArenaBattleOrchestrator:
         # The grant the OPERATOR configured, as distinct from one a vector
         # profile temporarily imposes. See _apply_operator_grant.
         self.operator_grant: Dict[str, Any] = {"global_budget_ceiling": 10000.0}
+        # True only inside run_campaign - see _apply_operator_grant.
+        self._preserve_policy = False
 
     # Dimensions a vector's authority_profile is allowed to override for the
     # duration of its own round.
@@ -225,11 +243,24 @@ class ArenaBattleOrchestrator:
         """
         grant = self._default_scope()
         grant.update(self.operator_grant)
+        # Restore the operator's baseline POLICY too, not just scope.
+        #
+        # Now that the Blue ladder is load-bearing (STEP_UP_VERIFICATION really
+        # does impose a per-transaction cap, TIGHTENED_HEADROOM_V2 really does
+        # withhold headroom), a policy left in force by an EARLIER vector
+        # contaminates later rounds exactly the way a leftover scope profile
+        # used to - a laundering round would report PER_TX instead of PURPOSE
+        # because a previous per-transaction breach had escalated the policy.
+        #
+        # Within a CAMPAIGN the ladder must persist, because watching it climb
+        # is the point; `preserve_policy` is how run_campaign says so.
         # allow_none: a full restore must be able to CLEAR an optional
         # dimension (per_transaction_cap back to unconstrained), not just
         # overwrite non-null ones.
         self.ledger.update_authority_scope(AUTHORITY_ID, grant, allow_none=True)
         auth = self.ledger.get_authority(AUTHORITY_ID)
+        if not getattr(self, "_preserve_policy", False):
+            auth.active_policy = DefensePolicy.STANDARD
         self.configured_ceiling = auth.global_budget_ceiling
         return auth
 
@@ -254,9 +285,13 @@ class ArenaBattleOrchestrator:
         clone = ArenaBattleOrchestrator.__new__(ArenaBattleOrchestrator)
         clone.simulator = PaymentSimulatorEngine()
         clone.ledger = DTLLedger()
+        clone.chain = DelegationChainRegistry()
         clone.invariant_engine = DTLInvariantEngine()
         clone.cost_governor = AdversarialCostGovernor()
-        clone.detector = self.detector            # stateless scoring
+        # Shares the loaded model (re-loading per what-if would cost seconds)
+        # but takes its OWN serving context, so a hypothetical round never
+        # writes velocity/graph state into the operator's live session.
+        clone.detector = self.detector.with_fresh_context()
         clone.pqc_module = self.pqc_module        # stateless signing
         clone.feedback_engine = ClosedLoopFeedbackEngine()
         # Hypothetical rounds are written to a sandbox directory so they never
@@ -284,6 +319,12 @@ class ArenaBattleOrchestrator:
         self.simulator.reset_all_rails()
         self.feedback_engine.reset()
         self.recorder.reset()
+        # The detector's serving history/graph is session state too - leaving
+        # it populated across a reset would let a previous session's velocity
+        # and graph context bleed into the next round's features.
+        self.detector.reset_context()
+        self.chain = DelegationChainRegistry()
+        self._lifecycle_churn = []
         self.last_round = None
         self.last_firewall_verdicts = []
         self.last_deception_verdicts = []
@@ -342,6 +383,8 @@ class ArenaBattleOrchestrator:
             "authority_state": state,
             "authority_vector": auth.authority_vector(),
             "invariant_registry": self.invariant_engine.registry(),
+            "policy_ladder": POLICY_LADDER,
+            "policy_overlay": auth.policy_overlay(),
             "detector_status": self.detector.status(),
             "pqc_status": self.pqc_module.provider_status(),
             "active_policy": str(getattr(auth.active_policy, "value", auth.active_policy)),
@@ -415,8 +458,37 @@ class ArenaBattleOrchestrator:
         speed: float = 1.0,
         strategy_override: Optional[str] = None,
     ) -> Dict[str, Any]:
-        self.speed = max(0.1, float(speed))
+        """
+        Public entry point. `is_running` is cleared in a `finally` because it
+        used to be cleared only on the happy path: if the SSE client hung up
+        mid-round the callback raised, the flag stuck True, and every control
+        in the UI stayed disabled until someone restarted the process. Closing
+        a browser tab mid-demo is not an exotic failure.
+        """
+        # Restore, don't hard-clear: a round nested inside a campaign must not
+        # report the whole campaign as finished when it returns.
+        was_running = self.is_running
         self.is_running = True
+        try:
+            return await self._run_round_stream_inner(
+                round_number=round_number,
+                dtl_enabled=dtl_enabled,
+                event_callback=event_callback,
+                speed=speed,
+                strategy_override=strategy_override,
+            )
+        finally:
+            self.is_running = was_running
+
+    async def _run_round_stream_inner(
+        self,
+        round_number: int = 2,
+        dtl_enabled: bool = True,
+        event_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        speed: float = 1.0,
+        strategy_override: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        self.speed = max(0.1, float(speed))
         auth = self.ledger.get_authority(AUTHORITY_ID)
 
         # Each rail enforces a PER-CYCLE limit, and a round models one cycle.
@@ -448,10 +520,107 @@ class ArenaBattleOrchestrator:
         total_objective = sum(t.amount for t in attacks)
         exp_id = self.recorder.experiment_id
 
+
+        # Refresh the detector's cross-authority graph metrics once per round,
+        # outside the per-transaction path (see refresh_graph_metrics for why
+        # it is not inline). This is what makes PageRank/betweenness/community
+        # non-zero for the transactions scored below.
+        self.detector.refresh_graph_metrics()
+
         def ev(**kwargs) -> ArenaEvent:
             kwargs.setdefault("experiment_id", exp_id)
             kwargs.setdefault("round_id", round_number)
             return ArenaEvent(**kwargs)
+
+        # ---- real sub-delegation, where the vector declares one.
+        # SCOPE_CREEP used to be a relabelled purchase; it now requires an
+        # actual scoped link to be issued out of the parent grant first, which
+        # is also what populates `reserved_spend_global`.
+        vector_cls = self._VECTORS.get(strategy)
+        request = getattr(vector_cls, "DELEGATION_REQUEST", None)
+        if request:
+            try:
+                link = self.chain.issue(auth, **request)
+                await self._emit(event_callback, ev(
+                    event_type=EventType.AUTHORITY_GRANTED, actor=Actor.DTL,
+                    source="principal", target="sub_agent",
+                    arrow_label=(f"SUB-DELEGATION: Rs {link.reserved_pool:,.0f} POOL TO "
+                                 f"{link.grantee_id.upper()}"),
+                    severity="info",
+                    payload={
+                        "link": self.chain.snapshot()[-1],
+                        "reserved_spend_global": round(auth.reserved_spend_global, 2),
+                        "description": (
+                            "A real scoped link, not a renamed agent_id: the pool is carved out "
+                            "of the parent grant and the sub-agent's scope is strictly narrower. "
+                            "Issuance refuses any request that would WIDEN authority."
+                        ),
+                    },
+                ), pause=0.4)
+            except ChainViolation as exc:
+                await self._emit(event_callback, ev(
+                    event_type=EventType.INVARIANT_VIOLATION, actor=Actor.DTL,
+                    source="sub_agent", target="dtl",
+                    arrow_label=f"SUB-DELEGATION REFUSED: {exc}",
+                    severity="critical",
+                    payload={"error": str(exc), "request": request},
+                ), pause=0.4)
+
+        # ---- a FORGED delegation link, where the vector presents one.
+        # This is how a self-minted credential enters the system. It is
+        # registered without validation on purpose, so the detection path is
+        # exercised rather than bypassed at the door.
+        forged = getattr(vector_cls, "FORGED_LINK", None)
+        if forged:
+            self.chain.register_external(DelegationLink(
+                link_id=forged["link_id"],
+                authority_id=auth.authority_id,
+                grantor_id=forged["grantor_id"],
+                grantee_id=forged["grantee_id"],
+                reserved_pool=forged["reserved_pool"],
+                attestation=forged["attestation"],
+            ))
+            await self._emit(event_callback, ev(
+                event_type=EventType.AUTHORITY_GRANTED, actor=Actor.RED_AGENT,
+                source="red_agent", target="dtl",
+                arrow_label=(f"PRESENTING DELEGATION LINK: Rs {forged['reserved_pool']:,.0f} "
+                             f"'GRANTED BY' {forged['grantor_id'].upper()}"),
+                severity="warning",
+                payload={
+                    "claimed_grantor": forged["grantor_id"],
+                    "grantee": forged["grantee_id"],
+                    "reserved_pool": forged["reserved_pool"],
+                    "description": (
+                        "The transaction itself declares nothing suspicious - in-scope MCC, "
+                        "in-budget amount, permitted rail, and an approver naming the real "
+                        "principal. Whether this link is genuine is decided by its attestation, "
+                        "not by anything the agent says about itself."
+                    ),
+                },
+            ), pause=0.45)
+
+        # ---- mandate revoke/regrant churn, where the vector scripts one.
+        # REVOCATION_FLOOD previously narrated a lifecycle race in its docstring
+        # and implemented none of it. The script is replayed against the ledger
+        # so the churn genuinely happens.
+        lifecycle_script = getattr(vector_cls, "LIFECYCLE_SCRIPT", None)
+        if lifecycle_script:
+            churn = [step for step, _ in lifecycle_script if step in ("REVOKE", "REGRANT")]
+            await self._emit(event_callback, ev(
+                event_type=EventType.AUTHORITY_GRANTED, actor=Actor.DTL,
+                source="red_agent", target="dtl",
+                arrow_label=f"MANDATE CHURN: {len(churn)} REVOKE/REGRANT EVENTS",
+                severity="warning",
+                payload={
+                    "script": [s for s, _ in lifecycle_script],
+                    "description": (
+                        "Revoke/re-grant churn is replayed against the ledger. Each re-grant "
+                        "resets PER-RAIL cycle state; the DTL's aggregate view does not reset, "
+                        "which is the discrepancy this vector bets on."
+                    ),
+                },
+            ), pause=0.4)
+            self._lifecycle_churn = churn
 
         vector = auth.authority_vector()
         await self._emit(event_callback, ev(
@@ -510,6 +679,11 @@ class ArenaBattleOrchestrator:
         ), pause=0.6)
 
         step_results: List[Dict[str, Any]] = []
+        # Amounts holding as authorization holds this round, swept into
+        # authorized/settled once the round's captures run.
+        held_this_round: List[float] = []
+        # Sub-delegation chain refusals this round (structural, not self-declared).
+        chain_violations: List[Dict[str, Any]] = []
         firewall_verdicts: List[Dict[str, Any]] = []
         deception_verdicts: List[Dict[str, Any]] = []
         last_proof = None
@@ -545,6 +719,7 @@ class ArenaBattleOrchestrator:
 
             is_local_auth, local_msg = self.simulator.process_transaction_local(tx)
             local_verdict = "APPROVED_BY_RAIL" if is_local_auth else "DECLINED_BY_RAIL"
+
 
             await self._emit(event_callback, ev(
                 event_type=EventType.RAIL_APPROVED if is_local_auth else EventType.RAIL_DECLINED,
@@ -620,15 +795,77 @@ class ArenaBattleOrchestrator:
                     },
                 ), pause=0.55)
 
+                # ---- sub-delegation chain check.
+                # A sub-agent is bound by its OWN link and every ancestor's, so
+                # a chain is only as wide as its narrowest hop. This is what
+                # makes SCOPE_CREEP a real mechanism rather than a renamed
+                # agent_id, and what catches a FORGED link (attestation that
+                # does not recompute) without reading any self-declared flag.
+                chain_ok, chain_code, chain_detail = self.chain.evaluate_action(
+                    auth, tx.agent_id, tx.amount, rail=tx.rail, mcc=tx.merchant_mcc
+                )
+                if not chain_ok:
+                    await self._emit(event_callback, ev(
+                        event_type=EventType.INVARIANT_VIOLATION, actor=Actor.DTL, step=idx,
+                        source="sub_agent", target="dtl",
+                        arrow_label=f"DELEGATION CHAIN: {chain_code}",
+                        severity="critical",
+                        payload={
+                            "chain_violation": chain_code,
+                            "detail": chain_detail,
+                            "agent_id": tx.agent_id,
+                            "chain": self.chain.snapshot(),
+                            "why": ("The sub-agent acted outside the link it actually holds. "
+                                    "Detected structurally - no field on the transaction "
+                                    "declares this."),
+                        },
+                    ), pause=0.5)
+                    chain_violations.append({"tx_id": tx.tx_id, "code": chain_code, **chain_detail})
+
                 # Every dimension is evaluated, not just the first failure, so a
                 # transaction that breaks the grant in two ways reports both.
                 violations = self.invariant_engine.evaluate_all(auth, tx)
                 proof = violations[0] if violations else None
                 is_valid = not violations
 
-                if is_valid:
+                if is_valid and str(getattr(tx, "settlement_action", "") or "") == "REFUND":
+                    # A refund moves money BACK to the principal, so it releases
+                    # consumed authority. This branch did not exist: every
+                    # transaction that passed the invariants was booked as
+                    # positive exposure regardless of direction, so a refund
+                    # leg of a settlement conflict INCREASED the agent's
+                    # consumed authority by its own value.
                     dtl_status = "INVARIANTS_SATISFIED"
-                    self.ledger.finalize_authorized_spend(auth.authority_id, tx.amount)
+                    credited = self.ledger.credit_refund(auth.authority_id, tx.amount)
+                    await self._emit(event_callback, ev(
+                        event_type=EventType.DTL_EXPOSURE_UPDATED, actor=Actor.DTL, step=idx,
+                        source="dtl", target="exposure_meter",
+                        arrow_label=f"REFUND CREDITED Rs {credited:,.0f} - AUTHORITY RELEASED",
+                        severity="info",
+                        payload={
+                            "direction": "CREDIT",
+                            "amount_credited": credited,
+                            "exposure_breakdown": self.ledger.exposure_breakdown(auth.authority_id),
+                            "note": ("A refund releases consumed authority. Booking it as spend "
+                                     "would make money move the wrong way through the ledger."),
+                        },
+                    ), pause=0.3)
+                elif is_valid:
+                    dtl_status = "INVARIANTS_SATISFIED"
+                    # EXPOSURE LIFECYCLE, phase 1: an approved authorization
+                    # places a HOLD. The funds are set aside and unavailable to
+                    # the other rails, but no money has moved yet. This used to
+                    # book straight into `authorized`, so `pending` and
+                    # `settled` were permanently 0.00 - the Delegation Ledger
+                    # UI rendered a four-bucket breakdown of which three
+                    # buckets could never be non-zero, and the top-5 SHAP
+                    # feature `pending_spend_global` was dead at serving while
+                    # training populated it. Capture/settlement happens at the
+                    # end of the round (see the settlement sweep below).
+                    self.ledger.register_pending_spend(auth.authority_id, tx.amount)
+                    held_this_round.append(tx.amount)
+                    # Draw down the sub-agent's pool too, if it has one.
+                    self.chain.consume(tx.agent_id, tx.amount)
                 else:
                     dtl_status = "CONTAINED_BY_DTL"
                     last_proof = proof
@@ -676,8 +913,11 @@ class ArenaBattleOrchestrator:
                     payload=verdict,
                 ), pause=0.3)
             else:
-                # DTL disabled: this is the "legacy world" comparison.
-                self.ledger.finalize_authorized_spend(auth.authority_id, tx.amount)
+                # DTL disabled: this is the "legacy world" comparison. The
+                # money still moves through the same lifecycle - the only
+                # difference is that nothing checks the aggregate first.
+                self.ledger.register_pending_spend(auth.authority_id, tx.amount)
+                held_this_round.append(tx.amount)
 
             await self._emit(event_callback, ev(
                 event_type=EventType.DTL_EXPOSURE_UPDATED, actor=Actor.DTL, step=idx,
@@ -700,6 +940,12 @@ class ArenaBattleOrchestrator:
             # ---- ML scoring (real trained model)
             prob, is_anom, explanation = self.detector.evaluate_transaction(auth, tx, explain=True)
             model_loaded = self.detector.model_loaded
+            # Record into the detector's serving context AFTER scoring, so the
+            # windowed and cross-authority features are populated for the NEXT
+            # transaction without this one leaking into its own vector. This is
+            # what closes the train/serve skew: a multi-leg attack's later legs
+            # now see real velocity/graph context, exactly as in training.
+            self.detector.observe(auth, tx)
             if model_loaded and prob == prob:  # NaN check
                 highest_ml_prob = max(highest_ml_prob, prob)
 
@@ -736,7 +982,13 @@ class ArenaBattleOrchestrator:
 
             # ---- graceful containment
             if dtl_enabled and proof is not None:
-                contained_tx, containment_action = self.cost_governor.apply_containment(auth, tx, proof)
+                # Which violation drives containment is a stated precedence
+                # (scope before economics), not whichever the registry happened
+                # to evaluate first - see AdversarialCostGovernor._PRECEDENCE.
+                governing = self.cost_governor.select_governing_proof(violations) or proof
+                contained_tx, containment_action = self.cost_governor.apply_containment(
+                    auth, tx, governing
+                )
 
                 await self._emit(event_callback, ev(
                     event_type=EventType.POLICY_DECISION, actor=Actor.COST_GOVERNOR, step=idx,
@@ -811,6 +1063,41 @@ class ArenaBattleOrchestrator:
                 "headroom_after": round(auth.authority_headroom, 2),
             })
 
+        # ---- EXPOSURE LIFECYCLE, phases 2 and 3: capture and settlement.
+        #
+        # Holds placed during this round now convert: the full amount moves
+        # pending -> authorized (captured), and a share of that moves
+        # authorized -> settled (funds actually moved). The remainder stays in
+        # `authorized` because real settlement lags authorization by hours to
+        # days - which is precisely the window in which a cross-rail splitter
+        # operates, and precisely why INV_01 counts all four buckets rather
+        # than settled money alone.
+        if held_this_round:
+            captured_total = sum(held_this_round)
+            self.ledger.finalize_authorized_spend(auth.authority_id, captured_total)
+            settled_now = round(captured_total * _SETTLEMENT_SHARE, 2)
+            if settled_now > 0:
+                self.ledger.finalize_settled_spend(auth.authority_id, settled_now)
+            await self._emit(event_callback, ev(
+                event_type=EventType.DTL_EXPOSURE_UPDATED, actor=Actor.DTL,
+                source="dtl", target="exposure_meter",
+                arrow_label=(f"SETTLEMENT SWEEP: Rs {settled_now:,.0f} SETTLED, "
+                             f"Rs {captured_total - settled_now:,.0f} STILL AUTHORIZED"),
+                severity="info",
+                payload={
+                    "lifecycle": "hold -> authorized -> settled",
+                    "captured_total": round(captured_total, 2),
+                    "settled_now": settled_now,
+                    "exposure_breakdown": self.ledger.exposure_breakdown(auth.authority_id),
+                    "why_it_matters": (
+                        "Settlement lags authorization. INV_01 counts settled + authorized + "
+                        "pending + reserved, because money that has not moved yet is still "
+                        "committed authority - and that lag is the window a cross-rail split "
+                        "exploits."
+                    ),
+                },
+            ), pause=0.35)
+
         # ---- Settlement Reconciliation: a THIRD parallel concern (see
         # app/settlement/reconciliation.py), evaluated once over every leg of
         # THIS round rather than per-transaction like the DTL invariants
@@ -822,7 +1109,10 @@ class ArenaBattleOrchestrator:
         settlement_proofs = evaluate_settlement(auth, attacks)
         if settlement_proofs:
             settlement_proof = settlement_proofs[0]
-            settlement_containment = apply_settlement_containment(settlement_proof)
+            exposure_before_containment = self.ledger.exposure_breakdown(auth.authority_id)
+            settlement_containment = apply_settlement_containment(
+                settlement_proof, ledger=self.ledger, authority_id=auth.authority_id
+            )
             settlement_verdict = {
                 "verdict": "CONFLICT_DETECTED",
                 "conflict_code": settlement_proof.conflict_code,
@@ -836,6 +1126,13 @@ class ArenaBattleOrchestrator:
                 "explanation": settlement_proof.explanation,
                 "containment_action": settlement_containment,
                 "proof_id": settlement_proof.proof_id,
+                # Before/after proof that the containment sentence describes a
+                # state change that actually happened. The RECON_02 message
+                # used to claim "the excess settlement applications are
+                # reversed" while exposure was byte-identical either side of
+                # the call.
+                "exposure_before_containment": exposure_before_containment,
+                "exposure_after_containment": self.ledger.exposure_breakdown(auth.authority_id),
             }
             await self._emit(event_callback, ev(
                 event_type=EventType.SETTLEMENT_RECONCILIATION_VERDICT, actor=Actor.DTL,
@@ -901,7 +1198,9 @@ class ArenaBattleOrchestrator:
 
         # ---- closed loop: red observes the defence and picks its next move
         settlement_detected = bool(settlement_proofs)
-        detected = last_proof is not None or settlement_detected
+        # A chain refusal is a genuine containment: the sub-agent was stopped
+        # acting outside the authority it actually holds.
+        detected = last_proof is not None or settlement_detected or bool(chain_violations)
         blue_outcome = self.feedback_engine.record_round_outcome(
             round_id=round_number,
             strategy=strategy,
@@ -982,7 +1281,8 @@ class ArenaBattleOrchestrator:
             },
         ), pause=0.2)
 
-        self.is_running = False
+        # (the flag is cleared by run_round_stream's `finally`, which also
+        #  covers the paths where this line was never reached)
         self.last_firewall_verdicts = firewall_verdicts
         self.last_deception_verdicts = deception_verdicts
 
@@ -995,6 +1295,8 @@ class ArenaBattleOrchestrator:
             "firewall_verdicts": firewall_verdicts,
             "deception_verdicts": deception_verdicts,
             "settlement_verdict": settlement_verdict,
+            "chain_violations": chain_violations,
+            "delegation_chain": self.chain.snapshot(),
             "authority_state": self.get_state()["authority_state"],
             "pqc_audit": pqc_audit,
             "pqc_tamper_tests": tamper,
@@ -1030,6 +1332,7 @@ class ArenaBattleOrchestrator:
         dtl_enabled: bool = True,
         event_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
         speed: float = 1.0,
+        adaptive: bool = False,
     ) -> Dict[str, Any]:
         """
         Runs a sequence of rounds back to back on THIS orchestrator (so
@@ -1037,17 +1340,80 @@ class ArenaBattleOrchestrator:
         returns each round's summary plus the session-level kill-chain
         coverage rollup over just this campaign's rounds.
         """
-        sequence = list(round_numbers) if round_numbers else list(self.DEFAULT_CAMPAIGN)
-        rounds: List[Dict[str, Any]] = []
-        for round_number in sequence:
-            result = await self.run_round_stream(
-                round_number=round_number, dtl_enabled=dtl_enabled,
-                event_callback=event_callback, speed=speed,
+        self.is_running = True
+        try:
+            return await self._run_campaign_inner(
+                round_numbers=round_numbers,
+                dtl_enabled=dtl_enabled,
+                event_callback=event_callback,
+                speed=speed,
+                adaptive=adaptive,
             )
-            rounds.append(result)
+        finally:
+            # Both of these are sticky flags that gate the entire UI and the
+            # policy-preservation rule. A disconnect mid-campaign must not
+            # leave either one latched.
+            self.is_running = False
+            self._preserve_policy = False
+
+    async def _run_campaign_inner(
+        self,
+        round_numbers: Optional[List[int]] = None,
+        dtl_enabled: bool = True,
+        event_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        speed: float = 1.0,
+        adaptive: bool = False,
+    ) -> Dict[str, Any]:
+        rounds: List[Dict[str, Any]] = []
+        executed: List[str] = []
+        # A campaign is one continuous session, so Blue's escalation must carry
+        # across its rounds - otherwise the ladder resets every round and can
+        # never reach suspension.
+        self._preserve_policy = True
+
+        if adaptive:
+            # ---- CLOSED LOOP. Red's own planner chooses each next move.
+            #
+            # This is what makes the loop closed. `plan_next_strategy()` was
+            # already called every round, emitted as a RED_ADAPTATION event,
+            # rendered in the UI - and then DISCARDED: the next round's vector
+            # came from `STRATEGY_BY_ROUND.get(round_number)`, a fixed dict. The
+            # planner was a readout, not a controller. The review's question was
+            # "if I change the planner's next_strategy, what code path makes the
+            # next attack change?" and the answer was: none.
+            #
+            # Now the plan IS the input. Change the planner's scoring and the
+            # campaign genuinely takes a different path.
+            rounds_to_run = len(round_numbers) if round_numbers else len(self.DEFAULT_CAMPAIGN)
+            for _ in range(rounds_to_run):
+                plan = self.feedback_engine.plan_next_strategy()
+                strategy = plan.get("next_strategy")
+                if not strategy or strategy not in self._VECTORS:
+                    break
+                executed.append(strategy)
+                result = await self.run_round_stream(
+                    round_number=STRATEGY_TO_ROUND.get(strategy, 2),
+                    dtl_enabled=dtl_enabled, event_callback=event_callback,
+                    speed=speed, strategy_override=strategy,
+                )
+                rounds.append(result)
+            sequence = [STRATEGY_TO_ROUND.get(s, 2) for s in executed]
+        else:
+            sequence = list(round_numbers) if round_numbers else list(self.DEFAULT_CAMPAIGN)
+            for round_number in sequence:
+                result = await self.run_round_stream(
+                    round_number=round_number, dtl_enabled=dtl_enabled,
+                    event_callback=event_callback, speed=speed,
+                )
+                rounds.append(result)
+                executed.append(result.get("strategy", ""))
+
+        self._preserve_policy = False
 
         return {
             "round_numbers": sequence,
+            "strategies_executed": executed,
+            "adaptive": adaptive,
             "rounds": rounds,
             "kill_chain_coverage": kill_chain_coverage(
                 [r["kill_chain"] for r in rounds]
@@ -1055,4 +1421,5 @@ class ArenaBattleOrchestrator:
             "final_active_policy": _policy_name(
                 self.ledger.get_authority(AUTHORITY_ID).active_policy
             ),
+            "policy_overlay": self.ledger.get_authority(AUTHORITY_ID).policy_overlay(),
         }

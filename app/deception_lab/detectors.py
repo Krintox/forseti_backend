@@ -46,18 +46,68 @@ def _proof(tx_id: str, *, deception_type: str, severity: str,
     )
 
 
+# A payload that wants the agent to spend beyond its grant has to SAY SO -
+# it must assert some larger permitted amount, or there is nothing for the
+# agent to act on. That semantic obligation is far harder to evade than any
+# particular phrasing, so this is matched in addition to the phrase list.
+_AMOUNT_ASSERTION = re.compile(
+    r"(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)|([\d,]{4,}(?:\.\d+)?)\s*(?:rupees|rs\b|inr)",
+    re.IGNORECASE,
+)
+
+
+def _asserted_amounts(text: str) -> List[float]:
+    out: List[float] = []
+    for match in _AMOUNT_ASSERTION.finditer(text or ""):
+        raw = match.group(1) or match.group(2) or ""
+        try:
+            out.append(float(raw.replace(",", "")))
+        except ValueError:
+            continue
+    return out
+
+
 def detect_prompt_injection(auth: DTLGlobalAuthorityState, tx: SyntheticTransaction) -> Optional[DeceptionProof]:
-    """Attack 1: a merchant/tool result tries to talk the agent past its authority."""
+    """
+    Attack 1: a merchant/tool result tries to talk the agent past its authority.
+
+    TWO detectors, not one. The phrase list alone was worthless as evidence: the
+    demo payload contained three of its four literal trigger phrases in twenty
+    words, so it could not fail - and a one-sentence paraphrase carrying the
+    same objective evaded it completely.
+
+    The second check is semantic rather than lexical: untrusted merchant text
+    that ASSERTS A SPENDING LIMIT ABOVE THE LIVE GRANT is flagged however it is
+    phrased. An injection that wants more authority has to name a bigger number
+    to be useful, so this targets the payload's objective instead of its
+    vocabulary. It is still not a security boundary - see the module docstring
+    - but it is at least evidence about the attacker rather than about our own
+    regex.
+    """
     payload = tx.injected_payload
     if not payload:
         return None
-    if not any(p.search(payload) for p in _INJECTION_PATTERNS):
+
+    phrase_hit = any(p.search(payload) for p in _INJECTION_PATTERNS)
+    over_grant = [a for a in _asserted_amounts(payload) if a > auth.global_budget_ceiling]
+
+    if not phrase_hit and not over_grant:
         return None
+
+    basis = []
+    if phrase_hit:
+        basis.append("instruction-shaped phrasing")
+    if over_grant:
+        basis.append(
+            f"asserts a spending limit of Rs {max(over_grant):,.2f} against a live grant of "
+            f"Rs {auth.global_budget_ceiling:,.2f}"
+        )
+
     return _proof(
         tx.tx_id,
         deception_type="PROMPT_INJECTION",
         severity="HIGH",
-        deceptive_input=payload,
+        deceptive_input=f"{payload}  [flagged on: {', '.join(basis)}]",
         ground_truth_check=(
             f"DTL evaluated tx_id={tx.tx_id} against the signed grant using only "
             f"amount/rail/mcc/items - free text from a merchant is never parsed as an "
@@ -132,9 +182,21 @@ def detect_context_poisoning(auth: DTLGlobalAuthorityState, tx: SyntheticTransac
 
 
 def detect_self_approval(auth: DTLGlobalAuthorityState, tx: SyntheticTransaction) -> Optional[DeceptionProof]:
-    """Attack 4: a subordinate/compromised agent approves its own escalation."""
-    if not tx.self_approved:
-        return None
+    """
+    Attack 4: an agent recorded as its own approver.
+
+    SCOPE, STATED HONESTLY. This detects the NAIVE case - an agent that
+    truthfully records itself as approver - and that is a real
+    misconfiguration worth surfacing. It is NOT the impersonation defence:
+    a forger's entire objective is that the ledger does not record it this
+    way, so it will name the principal instead and this check stays silent.
+
+    The actual defence against a forged approval is structural and lives in
+    `dtl/delegation_chain.py`: a delegation link carries an attestation only
+    its true grantor could produce, and `evaluate_action` refuses one that
+    does not recompute. That check reads nothing the attacker controls, which
+    is why AUTHORITY_IMPERSONATION is caught there rather than here.
+    """
     if tx.approving_agent_id is None or tx.approving_agent_id != tx.agent_id:
         return None
     return _proof(

@@ -40,26 +40,102 @@ class SyntheticMLDatasetBuilder:
             return random.choice(self.SHARED_DEVICE_POOL)
         return f"dev_primary_{auth.authority_id}"
 
-    # _build_transaction routes EVERY attack family through exactly one fixed
-    # merchant_id (merch_split_chain, merch_laundering_mega, ...) and
-    # legitimate traffic through another. Without diversification, any
-    # per-merchant graph feature (in-degree, PageRank) becomes a near-perfect
-    # fingerprint of the label - the model learns "which merchant string this
-    # is", not a fraud-ring pattern, which is exactly the kind of proxy
-    # leakage the amount-range and stored-value overlaps elsewhere in this
-    # file exist to prevent. Rerouting a slice of ALL traffic through a small
-    # shared pool, regardless of family, breaks that 1:1 mapping.
-    COMMON_MERCHANT_POOL = [
-        ("merch_common_hub_01", "CityWide Retail Hub"),
-        ("merch_common_hub_02", "Metro Shopping Plaza"),
-        ("merch_common_hub_03", "Neighborhood Super Center"),
+    # ------------------------------------------------------------------
+    # MERCHANT POPULATION  (replaces the previous one-merchant-per-family
+    # layout plus its 22% `_diversify_merchant` patch)
+    #
+    # The earlier design gave every attack family its own dedicated merchant
+    # node and routed all legitimate traffic through a single other node. The
+    # 22% diversification pass was intended to break that, and did not: it
+    # rewrote merchant_id while leaving 78% of each family on its own node AND
+    # never touched merchant_mcc at all. The result was measurable - PageRank
+    # became the model's #2 SHAP feature by fingerprinting "which merchant
+    # node is this", and four of six families were separable by a single
+    # categorical fact (an MCC that never occurs in legitimate traffic).
+    #
+    # This population fixes the mechanism instead of patching the symptom:
+    #
+    #   * ONE shared population. No merchant belongs to a family. Legitimate
+    #     and attack traffic both draw from the same list.
+    #   * MCC is a property of the MERCHANT, never of the family. A family
+    #     cannot carry a categorical fingerprint it does not choose.
+    #   * Attacks CONCENTRATE at high-risk merchants without being EXCLUSIVE
+    #     to them, and legitimate traffic reaches those same merchants. That
+    #     is what makes in-degree/PageRank a genuine aggregator signal (the
+    #     documented mule-hub shape) rather than a label lookup.
+    #
+    # risk_tier: 0 = ordinary · 1 = elevated (sells liquid value) ·
+    #            2 = aggregator hub (many unrelated agents settle here)
+    # ------------------------------------------------------------------
+    MERCHANT_POPULATION = [
+        # In-scope grocery / dining / department - the delegated categories.
+        ("merch_fresh_direct",      "Fresh Direct Mart",             "5411", 0),
+        ("merch_daily_grocer",      "Daily Grocer Co-op",            "5411", 0),
+        ("merch_city_supermart",    "City Supermart",                "5411", 0),
+        ("merch_corner_kirana",     "Corner Kirana Store",           "5411", 0),
+        ("merch_greenleaf_organics","Greenleaf Organics",            "5411", 0),
+        ("merch_bistro_lane",       "Bistro Lane",                   "5812", 0),
+        ("merch_cafe_central",      "Cafe Central",                  "5812", 0),
+        ("merch_tandoor_house",     "Tandoor House",                 "5812", 0),
+        ("merch_metro_dept",        "Metro Department Store",        "5311", 0),
+        ("merch_grand_bazaar",      "Grand Bazaar",                  "5311", 0),
+        # In-scope, elevated: legitimately sells liquid/stored value too.
+        ("merch_megastore_vouch",   "Gourmet Mega Store & Vouchers", "5411", 1),
+        ("merch_valuemart_plus",    "ValueMart Plus",                "5411", 1),
+        ("merch_hyper_saver",       "HyperSaver Wholesale",          "5311", 1),
+        # Aggregator hubs - the mule-hub shape graph centrality exists to find.
+        ("merch_citywide_hub",      "CityWide Retail Hub",           "5411", 2),
+        ("merch_metro_plaza",       "Metro Shopping Plaza",          "5311", 2),
+        ("merch_neighborhood_ctr",  "Neighborhood Super Center",     "5812", 2),
+        # Out-of-delegated-scope categories. A real household genuinely shops
+        # here sometimes; the delegation simply does not cover it. Legitimate
+        # traffic reaches these (see _legit_out_of_scope_rate), which is what
+        # stops "MCC outside permitted set" from being a fraud fingerprint.
+        ("merch_tech_hardware",     "Enterprise Tech & Hardware",    "5045", 0),
+        ("merch_gadget_world",      "Gadget World",                  "5045", 0),
+        ("merch_digital_svc",       "Rapid Digital Services",        "5734", 0),
+        ("merch_software_mart",     "Software Mart",                 "5734", 1),
+        ("merch_micro_pos",         "Automated Micro POS",           "5499", 1),
+        ("merch_quickmart_misc",    "QuickMart Miscellaneous",       "5499", 0),
     ]
 
-    def _diversify_merchant(self, tx: SyntheticTransaction) -> None:
-        if random.random() < 0.22:
-            merchant_id, merchant_name = random.choice(self.COMMON_MERCHANT_POOL)
-            tx.merchant_id = merchant_id
-            tx.merchant_name = merchant_name
+    IN_SCOPE_MCCS = {"5411", "5812", "5311"}
+
+    # Share of LEGITIMATE traffic that lands on an out-of-delegated-scope MCC.
+    # Non-zero on purpose: it is what makes INV_03's false-positive rate real
+    # rather than zero, and it breaks the previous 1:1 mapping between
+    # "MCC out of scope" and "row is fraud".
+    _legit_out_of_scope_rate = 0.08
+
+    # Attack pull toward higher-risk merchants. Correlated with the label,
+    # deliberately not deterministic - the same discipline _assign_device
+    # already applies at 15%/3%.
+    _ATTACK_TIER_WEIGHTS = {0: 1.0, 1: 2.5, 2: 4.0}
+    _LEGIT_TIER_WEIGHTS = {0: 1.0, 1: 0.6, 2: 0.5}
+
+    def _select_merchant(
+        self,
+        is_attack: bool,
+        require_in_scope: Optional[bool] = None,
+    ) -> Tuple[str, str, str]:
+        """
+        Draws (merchant_id, merchant_name, mcc) from the shared population.
+
+        `require_in_scope` constrains the draw only where a family's DEFINITION
+        depends on it (intent laundering must sit at a compliant merchant;
+        scope creep must sit outside the delegated categories). Everything
+        else draws freely, so no family owns a merchant or an MCC.
+        """
+        pool = self.MERCHANT_POPULATION
+        if require_in_scope is True:
+            pool = [m for m in pool if m[2] in self.IN_SCOPE_MCCS]
+        elif require_in_scope is False:
+            pool = [m for m in pool if m[2] not in self.IN_SCOPE_MCCS]
+
+        weights_by_tier = self._ATTACK_TIER_WEIGHTS if is_attack else self._LEGIT_TIER_WEIGHTS
+        weights = [weights_by_tier[m[3]] for m in pool]
+        merchant_id, merchant_name, mcc, _tier = random.choices(pool, weights=weights, k=1)[0]
+        return merchant_id, merchant_name, mcc
 
     def generate_trajectory(
         self,
@@ -190,6 +266,15 @@ class SyntheticMLDatasetBuilder:
             row["is_fraud"] = 1 if is_attack else 0
             row["attack_family"] = family
             row["is_holdout"] = 1 if family in holdouts else 0
+            # Raw categorical provenance. NOT features - ALL_FEATURE_NAMES is
+            # what train/serve consume, and these are excluded from it. They
+            # exist so leakage_audit.py can check whether any single
+            # categorical value has become a label lookup, which is exactly
+            # the check whose absence let the MCC/merchant fingerprint ship.
+            row["merchant_mcc"] = tx.merchant_mcc
+            row["merchant_id"] = tx.merchant_id
+            row["device_id"] = tx.device_id or ""
+            row["rail"] = str(getattr(tx.rail, "value", tx.rail))
             records.append(row)
 
         while len(records) < num_samples:
@@ -318,9 +403,14 @@ class SyntheticMLDatasetBuilder:
         timestamp: datetime,
         is_attack: bool
     ) -> Tuple[SyntheticTransaction, str]:
-        """Builds the transaction, then de-fingerprints merchant/device identity."""
+        """
+        Builds the transaction, then assigns device identity.
+
+        Merchant identity is no longer patched here: _build_transaction now
+        draws it from the shared MERCHANT_POPULATION at construction time, so
+        there is no per-family merchant to de-fingerprint after the fact.
+        """
         tx, fam = self._build_transaction(auth, attack_family, timestamp, is_attack)
-        self._diversify_merchant(tx)
         tx.device_id = self._assign_device(auth, is_attack)
         return tx, fam
 
@@ -358,7 +448,17 @@ class SyntheticMLDatasetBuilder:
                 amount = round(float(np.random.lognormal(mean=6.5, sigma=0.7)), 2)
                 amount = max(100.0, min(amount, auth.global_budget_ceiling * 0.4))
 
-            mcc = random.choice(["5411", "5812", "5311"])
+            # (c) ~8% of legitimate spend lands on a merchant OUTSIDE the
+            #     delegated categories. A household genuinely buys a laptop
+            #     charger sometimes. The DTL correctly refuses it (INV_03) and
+            #     that is a true positive for the POLICY and a false positive
+            #     for FRAUD - the two are different questions, and keeping
+            #     them different is what stops "MCC out of scope" from being a
+            #     deterministic fraud label.
+            want_in_scope = random.random() >= self._legit_out_of_scope_rate
+            merchant_id, merchant_name, mcc = self._select_merchant(
+                is_attack=False, require_in_scope=want_in_scope
+            )
 
             if random.random() < 0.09:
                 # In-scope minor stored-value purchase inside a genuine basket.
@@ -383,8 +483,8 @@ class SyntheticMLDatasetBuilder:
                 agent_id=auth.agent_id,
                 rail=rail,
                 amount=amount,
-                merchant_id="merch_normal_groceries",
-                merchant_name="Fresh Direct Mart",
+                merchant_id=merchant_id,
+                merchant_name=merchant_name,
                 merchant_mcc=mcc,
                 items=items,
                 created_at=timestamp
@@ -399,15 +499,19 @@ class SyntheticMLDatasetBuilder:
             amount = round(float(random.uniform(0.28, 0.55) * auth.global_budget_ceiling), 2)
             rail = random.choice(rails)
             items = [CartItem(sku="SKU_SPLIT_01", name="Retail Order Split", category="RETAIL", unit_price=amount, quantity=1)]
+            # A splitter's whole technique is looking ordinary per leg, so it
+            # shops where ordinary spend happens - drawn from the shared pool
+            # with no family-owned merchant and no reserved MCC.
+            merchant_id, merchant_name, mcc = self._select_merchant(is_attack=True)
             return SyntheticTransaction(
                 tx_id=tx_id,
                 authority_id=auth.authority_id,
                 agent_id=auth.agent_id,
                 rail=rail,
                 amount=amount,
-                merchant_id="merch_split_chain",
-                merchant_name="Multi-Store Express",
-                merchant_mcc="5311",
+                merchant_id=merchant_id,
+                merchant_name=merchant_name,
+                merchant_mcc=mcc,
                 items=items,
                 created_at=timestamp,
                 is_anomalous_red_attack=True,
@@ -426,15 +530,22 @@ class SyntheticMLDatasetBuilder:
                 CartItem(sku="SKU_MILK_GEN", name="Organic Milk", category="GROCERY", unit_price=groc_amt, quantity=1),
                 CartItem(sku="SKU_GIFT_DIGITAL", name="Amazon Pay Digital Gift Card", category="GIFT_CARD", unit_price=gift_amt, quantity=1, is_stored_value=True)
             ]
+            # Laundering is DEFINED by sitting at a compliant merchant while
+            # the cart is not - so this family constrains MCC to in-scope. It
+            # still draws a real merchant from the shared pool rather than
+            # owning one.
+            laundering_merchant_id, laundering_merchant_name, laundering_mcc = self._select_merchant(
+                is_attack=True, require_in_scope=True
+            )
             return SyntheticTransaction(
                 tx_id=tx_id,
                 authority_id=auth.authority_id,
                 agent_id=auth.agent_id,
                 rail=random.choice(rails),
                 amount=total_amt,
-                merchant_id="merch_laundering_mega",
-                merchant_name="Gourmet Mega Store & Vouchers",
-                merchant_mcc="5411",
+                merchant_id=laundering_merchant_id,
+                merchant_name=laundering_merchant_name,
+                merchant_mcc=laundering_mcc,
                 items=items,
                 created_at=timestamp,
                 is_anomalous_red_attack=True,
@@ -443,15 +554,28 @@ class SyntheticMLDatasetBuilder:
 
         elif attack_family == "REVOCATION_FLOOD":
             amount = round(float(random.uniform(0.20, 0.50) * auth.global_budget_ceiling), 2)
+            # Previously pinned to MCC 5734, which appeared in NO legitimate
+            # row - making this family perfectly separable by one categorical
+            # value and producing the 1.000 PR-AUC / mean-probability-1.0
+            # "holdout success" that was really a leak readout.
+            merchant_id, merchant_name, mcc = self._select_merchant(is_attack=True)
+            # Rail was previously pinned to AGENTIC_AP2 for 100% of this
+            # family, making `rail` a second categorical fingerprint with
+            # recall 1.0. Mandate churn is most natural on the agentic rail,
+            # so it stays weighted there - but not exclusively.
+            revoc_rail = random.choices(
+                [PaymentRailType.AGENTIC_AP2, PaymentRailType.UPI_CIRCLE, PaymentRailType.CARD_TOKEN],
+                weights=[0.6, 0.25, 0.15], k=1,
+            )[0]
             return SyntheticTransaction(
                 tx_id=tx_id,
                 authority_id=auth.authority_id,
                 agent_id=auth.agent_id,
-                rail=PaymentRailType.AGENTIC_AP2,
+                rail=revoc_rail,
                 amount=amount,
-                merchant_id="merch_revoc_race",
-                merchant_name="Rapid Digital Services",
-                merchant_mcc="5734",
+                merchant_id=merchant_id,
+                merchant_name=merchant_name,
+                merchant_mcc=mcc,
                 items=[CartItem(sku="SKU_REVOC_DIG", name="Instant Software Token", category="DIGITAL", unit_price=amount, quantity=1)],
                 created_at=timestamp,
                 is_anomalous_red_attack=True,
@@ -461,15 +585,23 @@ class SyntheticMLDatasetBuilder:
         elif attack_family == "VELOCITY_BURST":
             # Micro-amount probes
             amount = round(float(random.uniform(50.0, 300.0)), 2)
+            merchant_id, merchant_name, mcc = self._select_merchant(is_attack=True)
+            # Card testing is genuinely card-weighted (that is the credential
+            # being validated), but it was previously 100% CARD_TOKEN, which
+            # made `rail` a recall-1.0 fingerprint for this family.
+            burst_rail = random.choices(
+                [PaymentRailType.CARD_TOKEN, PaymentRailType.UPI_CIRCLE, PaymentRailType.AGENTIC_AP2],
+                weights=[0.7, 0.18, 0.12], k=1,
+            )[0]
             return SyntheticTransaction(
                 tx_id=tx_id,
                 authority_id=auth.authority_id,
                 agent_id=auth.agent_id,
-                rail=PaymentRailType.CARD_TOKEN,
+                rail=burst_rail,
                 amount=amount,
-                merchant_id="merch_probe_burst",
-                merchant_name="Automated Micro POS",
-                merchant_mcc="5499",
+                merchant_id=merchant_id,
+                merchant_name=merchant_name,
+                merchant_mcc=mcc,
                 items=[CartItem(sku="SKU_MICRO_PROBE", name="Micro Probe Item", category="MISC", unit_price=amount, quantity=1)],
                 created_at=timestamp,
                 is_anomalous_red_attack=True,
@@ -478,15 +610,24 @@ class SyntheticMLDatasetBuilder:
 
         else: # SCOPE_CREEP or BASELINE_POISONING
             amount = round(float(random.uniform(0.40, 0.80) * auth.global_budget_ceiling), 2)
+            # Scope creep is DEFINED by leaving the delegated categories, so
+            # this family does constrain MCC to out-of-scope. It is no longer a
+            # fingerprint, because ~8% of legitimate traffic lands out of scope
+            # too (see _legit_out_of_scope_rate) - the model must now learn
+            # scope violation ALONGSIDE other evidence rather than reading one
+            # categorical value as the label.
+            merchant_id, merchant_name, mcc = self._select_merchant(
+                is_attack=True, require_in_scope=False
+            )
             return SyntheticTransaction(
                 tx_id=tx_id,
                 authority_id=auth.authority_id,
                 agent_id=auth.agent_id,
                 rail=random.choice(rails),
                 amount=amount,
-                merchant_id="merch_scope_creep",
-                merchant_name="Enterprise Tech & Hardware",
-                merchant_mcc="5045",
+                merchant_id=merchant_id,
+                merchant_name=merchant_name,
+                merchant_mcc=mcc,
                 items=[CartItem(sku="SKU_TECH_01", name="High-End Workstation GPU", category="ELECTRONICS", unit_price=amount, quantity=1)],
                 created_at=timestamp,
                 is_anomalous_red_attack=True,

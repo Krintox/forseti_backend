@@ -45,6 +45,15 @@ class PaymentGraph:
         self._community_of: Dict[str, int] = {}
         self._community_sizes: Dict[int, int] = {}
 
+    def node_count(self) -> int:
+        return int(self.graph.number_of_nodes())
+
+    def edge_count(self) -> int:
+        return int(self.graph.number_of_edges())
+
+    def transaction_count(self) -> int:
+        return int(self._tx_count)
+
     @staticmethod
     def _agent_node(agent_id: str) -> str:
         return f"agent::{agent_id}"

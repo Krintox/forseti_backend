@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 
 import pytest
 
@@ -78,12 +79,17 @@ class TestDTL:
             if ok:
                 ledger.finalize_authorized_spend(AUTHORITY_ID, tx.amount)
 
-        assert results[0][0] is True, "first 4k must fit inside a 10k grant"
-        assert results[1][0] is True, "second 4k still fits (8k of 10k)"
-        assert results[2][0] is False, "third 4k must breach the 10k ceiling"
-        proof = results[2][1]
-        assert proof.invariant_code == "INV_01_GLOBAL_BUDGET_EXCEEDED"
-        assert proof.total_exposure_after == pytest.approx(12000.0)
+        # Amounts are deliberately uneven and randomised now (a real splitter
+        # destroys the amount correlation key), so assert the SHAPE - early legs
+        # fit, the aggregate eventually breaches - not three fixed figures.
+        assert results[0][0] is True, "the first leg must fit inside the grant"
+        assert results[-1][0] is False, "the aggregate must eventually breach the ceiling"
+        proof = results[-1][1]
+        assert proof.invariant_code == "INV_01_GLOBAL_BUDGET_EXCEEDED", (
+            "the flagship must be caught by the AGGREGATE, not by a scope check - "
+            "every other dimension is deliberately clean"
+        )
+        assert proof.total_exposure_after > proof.global_ceiling
 
     def test_semantic_drift_detected_on_stored_value(self):
         auth = DTLLedger().get_authority(AUTHORITY_ID)
@@ -121,9 +127,22 @@ class TestDTL:
         )
         ok, proof = DTLInvariantEngine().evaluate_invariants(auth, tx)
         assert ok is False
+        exposure_before = auth.total_exposure_global
+        ceiling_before = auth.global_budget_ceiling
         _, action = AdversarialCostGovernor().apply_containment(auth, tx, proof)
         assert "PARTIAL_AUTH" in action
-        assert "2500" in action and "1500" in action
+        # Assert on the amounts, not on their formatting - the previous version
+        # matched the raw substring "2500", which broke the moment the action
+        # string gained thousands separators even though the behaviour was
+        # unchanged.
+        digits = re.sub(r"[^0-9.]", " ", action)
+        assert "2500.00" in digits.replace(" ", "") or "2500" in digits
+        assert "1500.00" in digits.replace(" ", "") or "1500" in digits
+        # The genuine portion is BOOKED as exposure, and the principal's grant
+        # is never rewritten (regression guard: containment used to subtract the
+        # approved amount from the ceiling instead of booking it).
+        assert auth.global_budget_ceiling == ceiling_before
+        assert auth.total_exposure_global == pytest.approx(exposure_before + 2500.0)
 
 
 # ----------------------------------------------------------- simulator

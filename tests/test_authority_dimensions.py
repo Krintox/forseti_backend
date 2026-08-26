@@ -180,12 +180,24 @@ class TestDimensionInteraction:
         assert "INV_01_GLOBAL_BUDGET_EXCEEDED" in codes
 
     def test_registry_covers_every_dimension_exactly_once(self):
+        """
+        Scoped to `kind == "authority_dimension"`. INV_08_MANDATE_SUSPENDED is
+        also in the registry but is a POLICY STATE, not a dimension - it exists
+        so the Blue escalation ladder is enforced rather than displayed, and
+        counting it here would double up on TIME.
+        """
         rows = DTLInvariantEngine.registry()
-        dims = [r["dimension"] for r in rows]
+        dimension_rows = [r for r in rows if r.get("kind") == "authority_dimension"]
+        dims = [r["dimension"] for r in dimension_rows]
         assert sorted(dims) == sorted(
             ["TIME", "RAIL", "PER_TX", "MERCHANT", "PURPOSE", "AMOUNT", "BENEFICIARY"]
         )
         assert len(rows) == len(set(r["code"] for r in rows))
+        # Every row must declare which kind it is, so the UI cannot present a
+        # policy state as an eighth authority dimension.
+        assert all(r.get("kind") in {"authority_dimension", "policy_state"} for r in rows)
+        assert any(r["code"] == "INV_08_MANDATE_SUSPENDED" and r["kind"] == "policy_state"
+                   for r in rows)
 
     def test_default_grant_is_unconstrained_on_the_new_dimensions(self):
         """
@@ -267,14 +279,57 @@ class TestCounterfactualIsolation:
         live = ArenaBattleOrchestrator()
         sandbox = live.sandbox()
 
-        # Expensive, stateless components are shared to keep what-ifs fast.
-        assert sandbox.detector is live.detector
+        # The expensive part - the loaded model and its explainer - is shared,
+        # so a what-if does not pay a model reload.
+        assert sandbox.detector.model is live.detector.model
+        assert sandbox.detector.raw_model is live.detector.raw_model
         assert sandbox.pqc_module is live.pqc_module
+
+        # But the detector is NO LONGER stateless: it carries per-authority
+        # history and a live entity graph so that serving features match
+        # training features. Sharing the whole detector would let a
+        # hypothetical round write velocity/graph state into the operator's
+        # real session, which is the same class of bug as sharing the ledger.
+        assert sandbox.detector is not live.detector
+        assert sandbox.detector._histories is not live.detector._histories
+        assert sandbox.detector._graph is not live.detector._graph
+
         # Everything carrying round state must be independent.
         assert sandbox.ledger is not live.ledger
         assert sandbox.recorder is not live.recorder
         assert sandbox.simulator is not live.simulator
         assert sandbox.feedback_engine is not live.feedback_engine
+
+    def test_hypothetical_scoring_does_not_pollute_live_serving_context(self):
+        """
+        The behavioural version of the test above: running transactions through
+        the sandbox detector must leave the live detector's serving context
+        empty, or counterfactuals would silently inflate the real session's
+        velocity and graph features.
+        """
+        from app.arena.orchestrator import ArenaBattleOrchestrator
+        from app.models.state import DTLGlobalAuthorityState, PaymentRailType
+        from app.models.transactions import CartItem, SyntheticTransaction
+
+        live = ArenaBattleOrchestrator()
+        sandbox = live.sandbox()
+        auth = DTLGlobalAuthorityState(
+            authority_id="auth_x", principal="p", agent_id="agt_x",
+            global_budget_ceiling=10000.0,
+        )
+        for i in range(5):
+            tx = SyntheticTransaction(
+                tx_id=f"tx_hypo_{i}", authority_id="auth_x", agent_id="agt_x",
+                rail=PaymentRailType.UPI_CIRCLE, amount=500.0,
+                merchant_id=f"merch_{i}", merchant_name="M", merchant_mcc="5411",
+                items=[CartItem(sku="s", name="n", category="GROCERY",
+                                unit_price=500.0, quantity=1)],
+            )
+            sandbox.detector.observe(auth, tx)
+
+        assert sandbox.detector.context_status()["transactions_in_history"] == 5
+        assert live.detector.context_status()["transactions_in_history"] == 0
+        assert live.detector.context_status()["graph_nodes"] == 0
 
     def test_running_a_hypothetical_leaves_live_state_untouched(self):
         import asyncio
@@ -385,9 +440,18 @@ class TestVectorProfilesDoNotContaminateLaterRounds:
                 speed=100.0, strategy_override=strategy))
             proofs = [s["proof"] for s in result["step_results"] if s.get("proof")]
             assert proofs, f"{strategy} should violate its dimension"
-            assert proofs[0]["authority_dimension"] == self.EXPECTED_DIMENSION[strategy], (
-                f"{strategy} reported {proofs[0]['authority_dimension']} - a previous "
-                f"vector's profile is still in force"
+            # Check the dimension appears ANYWHERE in the round, not only on
+            # the first violating step. Several vectors now open with a
+            # deliberately legitimate warm-up leg (a real adversary establishes
+            # a plausible pattern before the boundary test), and in a campaign
+            # where exposure has accumulated that leg can trip AMOUNT first.
+            # Requiring proofs[0] made the assertion about leg ordering rather
+            # than about profile contamination, which is what it exists to catch.
+            dimensions = {p["authority_dimension"] for p in proofs}
+            assert self.EXPECTED_DIMENSION[strategy] in dimensions, (
+                f"{strategy} reported {sorted(dimensions)} but never "
+                f"{self.EXPECTED_DIMENSION[strategy]} - a previous vector's profile is "
+                f"still in force"
             )
 
     def test_an_optional_dimension_can_be_cleared_back_to_unconstrained(self):

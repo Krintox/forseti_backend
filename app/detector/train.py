@@ -42,6 +42,7 @@ from .calibration import ProbabilityCalibrator, calibration_summary  # noqa: E40
 from .dataset_builder import SyntheticMLDatasetBuilder  # noqa: E402
 from .explainability import FeatureExplainer  # noqa: E402
 from .feature_schema import ALL_FEATURE_NAMES, DTLFeatureExtractor  # noqa: E402
+from .leakage_audit import audit_categorical_leakage, family_separability  # noqa: E402
 from .model import backend_info, build_classifier, compute_scale_pos_weight  # noqa: E402
 
 DEFAULT_HOLDOUT_FAMILIES = ["CROSS_RAIL_SPLIT", "REVOCATION_FLOOD"]
@@ -147,6 +148,32 @@ def train_pipeline(
     family_counts = df["attack_family"].value_counts().to_dict()
     print(f"  samples={len(df)}  fraud={int(df['is_fraud'].sum())} ({df['is_fraud'].mean()*100:.2f}%)  features={len(ALL_FEATURE_NAMES)}")
     print(f"  attack families: {family_counts}")
+
+    # ------------------------------------------------- categorical leakage gate
+    # Run BEFORE training, and record the result in the artifact. The previous
+    # generator shipped a perfect categorical fingerprint (four families each
+    # owned an MCC that never occurred in legitimate traffic), which produced a
+    # held-out PR-AUC of 1.000 with mean predicted probability exactly 1.0 and
+    # was reported as generalisation. Nothing checked, so nothing caught it.
+    # This makes the anti-leakage claim measured rather than asserted.
+    print("\n[1b/7] Categorical leakage audit")
+    leak_report = audit_categorical_leakage(df)
+    separability = family_separability(df)
+    print(f"  passed={leak_report['passed']}  base_fraud_rate={leak_report['base_fraud_rate']}")
+    for fld, det in leak_report["per_field"].items():
+        print(f"    {fld:<14} values={det['values_checked']:<4} "
+              f"max P(fraud|v)={det['max_fraud_precision']} leaks={len(det['leaking_values'])}")
+    worst_fam = max(
+        separability.items(),
+        key=lambda kv: min(kv[1]["precision"], kv[1]["recall"]),
+        default=(None, {"precision": 0.0, "recall": 0.0, "field": None, "value": None}),
+    )
+    print(f"  strongest single-categorical family shortcut: {worst_fam[0]} via "
+          f"{worst_fam[1]['field']}={worst_fam[1]['value']} "
+          f"(P={worst_fam[1]['precision']}, R={worst_fam[1]['recall']})")
+    if not leak_report["passed"]:
+        print("  WARNING: categorical leakage detected - holdout results below are NOT "
+              "evidence of generalisation. Fix the generator before citing them.")
 
     # ------------------------------------------------------- temporal split
     print("\n[2/7] Temporal split (chronological, 70/15/15)")
@@ -259,6 +286,20 @@ def train_pipeline(
             "fraud_prevalence": round(float(df["is_fraud"].mean()), 4),
             "feature_count": len(ALL_FEATURE_NAMES),
             "attack_family_counts": {str(k): int(v) for k, v in family_counts.items()},
+        },
+        # Recorded so any holdout claim below can be checked against whether the
+        # dataset actually supports one. `passed: false` here invalidates the
+        # attack_family_holdout section as evidence of generalisation.
+        "leakage_audit": {
+            **leak_report,
+            "family_separability": separability,
+            "why_this_exists": (
+                "A previous revision of the generator gave four of six attack families an MCC "
+                "that never occurred in legitimate traffic. Held-out REVOCATION_FLOOD then scored "
+                "PR-AUC 1.000 with mean predicted probability exactly 1.0, and that was reported "
+                "as generalisation when it was the model reading one categorical value. This gate "
+                "runs before training so the claim is measured, not asserted."
+            ),
         },
         "split_periods": periods,
         "attack_family_holdout": holdout_eval,

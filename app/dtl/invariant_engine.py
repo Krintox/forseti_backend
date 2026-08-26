@@ -33,13 +33,29 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..models.proofs import SemanticDriftProof
-from ..models.state import AuthorityDimension, DTLGlobalAuthorityState
+from ..models.state import AuthorityDimension, DefensePolicy, DTLGlobalAuthorityState
 from ..models.transactions import SyntheticTransaction
+from .sku_catalogue import classify_item
 
 # Registry rendered by the UI and by docs. One row per dimension of authority.
 INVARIANT_REGISTRY: List[Dict[str, str]] = [
     {
+        # Not an authority DIMENSION but an authority STATE: the Blue team's
+        # escalation ladder, enforced. Listed first because a suspended mandate
+        # authorises nothing at any amount on any rail.
+        "code": "INV_08_MANDATE_SUSPENDED",
+        # NOT an authority dimension - a policy STATE. Tagged so the registry
+        # keeps the "exactly one invariant per dimension" property for the
+        # seven real dimensions while still surfacing this check in the UI.
+        "kind": "policy_state",
+        "dimension": AuthorityDimension.TIME.value,
+        "question": "Is the mandate currently suspended by an active containment policy?",
+        "expression": "ASSERT authority.active_policy != AGENT_SUSPENDED",
+        "severity": "CRITICAL",
+    },
+    {
         "code": "INV_06_AUTHORITY_EXPIRED",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.TIME.value,
         "question": "Is the delegation still inside its validity window?",
         "expression": "ASSERT now <= delegation_created_at + validity_window_hours",
@@ -47,6 +63,7 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
     },
     {
         "code": "INV_04_UNAUTHORIZED_RAIL",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.RAIL.value,
         "question": "Did the user authorise this payment rail at all?",
         "expression": "ASSERT tx.rail IN authority.permitted_rails",
@@ -54,6 +71,7 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
     },
     {
         "code": "INV_05_PER_TX_CAP_EXCEEDED",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.PER_TX.value,
         "question": "Is this single transaction inside the per-transaction cap?",
         "expression": "ASSERT tx.amount <= authority.per_transaction_cap",
@@ -61,6 +79,7 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
     },
     {
         "code": "INV_03_UNAUTHORIZED_MCC",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.MERCHANT.value,
         "question": "Is the merchant category inside the delegated scope?",
         "expression": "ASSERT tx.merchant_mcc IN authority.permitted_mccs",
@@ -68,6 +87,7 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
     },
     {
         "code": "INV_07_UNAUTHORIZED_BENEFICIARY",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.BENEFICIARY.value,
         "question": "Is the settlement counterparty inside the delegated beneficiary scope?",
         "expression": "ASSERT tx.vpa_delegate IN authority.beneficiary_scope",
@@ -75,6 +95,7 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
     },
     {
         "code": "INV_02_SEMANTIC_INTENT_DRIFT",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.PURPOSE.value,
         "question": "Does the basket match the authorised economic purpose?",
         "expression": "ASSERT cart.items.category NOT IN semantic_exclusions",
@@ -82,6 +103,7 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
     },
     {
         "code": "INV_01_GLOBAL_BUDGET_EXCEEDED",
+        "kind": "authority_dimension",
         "dimension": AuthorityDimension.AMOUNT.value,
         "question": "Does aggregate exposure across ALL rails stay inside the ceiling?",
         "expression": "ASSERT (settled + authorized + pending + reserved + new_tx) <= global_budget_ceiling",
@@ -92,6 +114,22 @@ INVARIANT_REGISTRY: List[Dict[str, str]] = [
 
 def _rail_value(tx: SyntheticTransaction) -> str:
     return str(getattr(tx.rail, "value", tx.rail))
+
+
+
+def _scope_breach_magnitude(auth, tx) -> float:
+    """
+    Drift magnitude for a categorical (in/out) dimension.
+
+    Rail, merchant and beneficiary scope are genuinely binary - the rail either
+    is permitted or it is not - so a fabricated gradient would be dishonest.
+    What DOES vary is how much authority the breach put at stake, so the score
+    is a floor of 0.5 (it is unambiguously a breach) plus up to 0.5 more for
+    the share of the grant involved. A Rs 50 out-of-scope payment and a Rs
+    9,000 one are both violations; they are not equally consequential.
+    """
+    ceiling = max(1.0, float(auth.global_budget_ceiling))
+    return round(min(1.0, 0.5 + 0.5 * (float(tx.amount) / ceiling)), 4)
 
 
 class DTLInvariantEngine:
@@ -129,6 +167,7 @@ class DTLInvariantEngine:
     ) -> List[SemanticDriftProof]:
         """Every violated dimension, ordered as INVARIANT_REGISTRY."""
         checks = (
+            self._check_agent_suspended,
             self._check_time,
             self._check_rail,
             self._check_per_tx_cap,
@@ -188,6 +227,41 @@ class DTLInvariantEngine:
 
     # ---------------------------------------------------------- invariants
 
+    def _check_agent_suspended(self, auth, tx, now) -> Optional[SemanticDriftProof]:
+        """
+        INV_08 - the active POLICY, enforced.
+
+        This is the check whose absence the adversarial review named as its
+        runner-up stage question: "show me the line where AGENT_SUSPENDED
+        causes a transaction to be rejected." There was no such line. Blue's
+        three-rung escalation ladder wrote `active_policy` and a set of knobs
+        that no authorization path ever read, so an agent whose mandate was
+        "suspended" transacted exactly as before and the ladder was a label.
+
+        It is checked FIRST because a suspended mandate authorises nothing, at
+        any amount, on any rail - the same logic that puts expiry first.
+        """
+        if not auth.policy_suspends_all_spend:
+            return None
+        return self._proof(
+            auth, tx, prefix="proof_policy",
+            code="INV_08_MANDATE_SUSPENDED",
+            dimension=AuthorityDimension.TIME.value,
+            severity="CRITICAL",
+            authorized="Mandate suspended pending fresh re-consent from the principal",
+            actual=f"Agent attempted ₹{tx.amount:,.2f} on {_rail_value(tx)} while suspended",
+            drift_score=1.0,
+            expression="ASSERT authority.active_policy != AGENT_SUSPENDED",
+            explanation=(
+                f"The delegation's active policy is AGENT_SUSPENDED, reached after repeated "
+                f"containments of the same invariant this session. Soft containment was tried "
+                f"and repeatedly bypassed by strategy changes, so the mandate is paused until "
+                f"the principal re-consents. No amount is authorised while it holds - this is "
+                f"the top rung of the escalation ladder, and it is enforced here rather than "
+                f"displayed."
+            ),
+        )
+
     def _check_time(self, auth, tx, now) -> Optional[SemanticDriftProof]:
         """INV_06 - TIME. An elapsed mandate authorises nothing, at any amount."""
         ref = now or datetime.now(timezone.utc)
@@ -201,7 +275,10 @@ class DTLInvariantEngine:
             severity="HIGH",
             authorized=f"Valid for {auth.validity_window_hours:.0f}h from grant, until {expired_at.isoformat()}",
             actual=f"Transaction presented after the delegation lapsed",
-            drift_score=0.9,
+            # Magnitude = how far past expiry, relative to the window itself.
+            drift_score=round(min(1.0, max(0.15, (
+                (ref - expired_at).total_seconds() / 3600.0
+            ) / max(1.0, float(auth.validity_window_hours or 1.0)))), 4),
             expression="ASSERT now <= delegation_created_at + validity_window_hours",
             explanation=(
                 f"The delegation expired at {expired_at.isoformat()}. The agent still holds a "
@@ -229,7 +306,7 @@ class DTLInvariantEngine:
             severity="HIGH",
             authorized=f"Rails permitted: {', '.join(permitted) if permitted else 'none'}",
             actual=f"Agent attempted ₹{tx.amount:,.2f} on {rail}",
-            drift_score=0.88,
+            drift_score=_scope_breach_magnitude(auth, tx),
             expression="ASSERT tx.rail IN authority.permitted_rails",
             explanation=(
                 f"The user delegated spend on {', '.join(permitted) or 'no rail'}, not on {rail}. "
@@ -240,18 +317,46 @@ class DTLInvariantEngine:
         )
 
     def _check_per_tx_cap(self, auth, tx, now) -> Optional[SemanticDriftProof]:
-        """INV_05 - PER_TX. A grant can bound single-transaction size independently of the total."""
-        cap = auth.per_transaction_cap
+        """
+        INV_05 - PER_TX. A grant can bound single-transaction size independently
+        of the total.
+
+        SCOPE OF THE CLAIM. Per-transaction caps are NOT novel per-rail: UPI
+        Circle mandates Rs 5,000 for a delegated secondary user, and the UPI
+        adapter here enforces exactly that. What no scheme provides is the
+        USER'S OWN bound applied across every rail at once - "nothing above
+        Rs 3,000" has to hold on card and on the agentic rail too, and neither
+        has any representation of the other legs. That cross-rail consistency
+        is what this invariant adds, and it is the only thing it should be
+        claimed to add.
+        """
+        # The EFFECTIVE cap: the tightest of the user's own bound and anything
+        # the active policy imposes (step-up threshold, capability quarantine).
+        # Reading `per_transaction_cap` directly was what made the Blue ladder
+        # inert - the policy could tighten this and nothing would notice.
+        cap = auth.effective_per_transaction_cap
         if cap is None or tx.amount <= cap:
             return None
+        policy_imposed = (
+            auth.per_transaction_cap is None or cap < auth.per_transaction_cap
+        )
         return self._proof(
             auth, tx, prefix="proof_pertx",
             code="INV_05_PER_TX_CAP_EXCEEDED",
             dimension=AuthorityDimension.PER_TX.value,
             severity="MEDIUM",
-            authorized=f"No single transaction above ₹{cap:,.2f}",
+            authorized=(
+                f"No single transaction above ₹{cap:,.2f}"
+                + (f" (tightened from ₹{auth.per_transaction_cap:,.2f} by active policy "
+                   f"{getattr(auth.active_policy, 'value', auth.active_policy)})"
+                   if policy_imposed and auth.per_transaction_cap is not None
+                   else f" (imposed by active policy "
+                        f"{getattr(auth.active_policy, 'value', auth.active_policy)})"
+                   if policy_imposed else "")
+            ),
             actual=f"Single transaction of ₹{tx.amount:,.2f} on {_rail_value(tx)}",
-            drift_score=0.7,
+            # Magnitude = how far over the cap, relative to the cap.
+            drift_score=round(min(1.0, (float(tx.amount) - cap) / max(1.0, cap)), 4),
             expression="ASSERT tx.amount <= authority.per_transaction_cap",
             explanation=(
                 f"₹{tx.amount:,.2f} exceeds the ₹{cap:,.2f} per-transaction cap by "
@@ -276,7 +381,7 @@ class DTLInvariantEngine:
             severity="HIGH",
             authorized=f"Merchant categories in scope: {', '.join(auth.permitted_mccs)}",
             actual=f"{tx.merchant_name} presented MCC {tx.merchant_mcc}",
-            drift_score=0.8,
+            drift_score=_scope_breach_magnitude(auth, tx),
             expression="ASSERT tx.merchant_mcc IN authority.permitted_mccs",
             explanation=(
                 f"MCC {tx.merchant_mcc} ({tx.merchant_name}) is outside the delegated merchant "
@@ -303,7 +408,7 @@ class DTLInvariantEngine:
             severity="HIGH",
             authorized=f"Beneficiary restricted to: {', '.join(scope) if scope else 'none'}",
             actual=f"Settlement routed to {tx.vpa_delegate or 'an unrecorded beneficiary'}",
-            drift_score=0.82,
+            drift_score=_scope_breach_magnitude(auth, tx),
             expression="ASSERT tx.vpa_delegate IN authority.beneficiary_scope",
             explanation=(
                 f"The delegation restricts settlement to {', '.join(scope) or 'no beneficiary'}, but "
@@ -318,18 +423,60 @@ class DTLInvariantEngine:
         """
         INV_02 - PURPOSE. The merchant is legitimate, the MCC is in scope, the
         amount fits - and the basket still converts the grant into liquid value.
+
+        TRUST DIRECTION. This check reasons over an ATTESTED catalogue
+        (`sku_catalogue.py`), not over the merchant's free-text category and
+        `is_stored_value` flag. Those are supplied by the party being defended
+        against, and a keyword list over them was trivially evadable: renaming
+        a gift card to "Prepaid Value Instrument" and clearing the flag made
+        this invariant silent. The SKU's attested nature decides; a merchant
+        mislabelling an attested liquid instrument is now itself recorded as
+        evidence rather than believed.
         """
         violated_skus: List[str] = []
+        misdeclared: List[str] = []
+        unattested: List[str] = []
+        bases: List[str] = []
+
         for item in tx.items:
-            is_excluded = item.is_stored_value or any(
-                ex.lower() in item.category.lower() or ex.lower() in item.name.lower()
-                for ex in auth.semantic_exclusions
-            )
-            if is_excluded:
+            verdict = classify_item(item.sku, item.category, item.is_stored_value)
+            if not verdict["attested"]:
+                unattested.append(item.sku)
+
+            excluded_by_grant = str(verdict["category"]).upper() in {
+                ex.upper() for ex in auth.semantic_exclusions
+            }
+            if verdict["is_liquid"] or excluded_by_grant:
                 violated_skus.append(item.sku)
+                bases.append(f"{item.sku}: {verdict['basis']}")
+                if verdict["misdeclared"]:
+                    misdeclared.append(item.sku)
+
+        # Under STRICT_CATALOG_ATTESTATION the operator has said unverifiable
+        # line items are not acceptable, so an unattested SKU is a violation in
+        # its own right. This is what makes that policy load-bearing instead of
+        # a label - see feedback/policy_adapter.py.
+        strict = auth.active_policy == DefensePolicy.STRICT_CATALOG_ATTESTATION
+        if strict and unattested:
+            for sku in unattested:
+                if sku not in violated_skus:
+                    violated_skus.append(sku)
+                    bases.append(f"{sku}: UNATTESTED under STRICT_CATALOG_ATTESTATION")
 
         if not violated_skus:
             return None
+
+        detail = ""
+        if misdeclared:
+            detail = (
+                f" The merchant declared {', '.join(misdeclared)} as ordinary merchandise while the "
+                f"catalogue attests it is liquid value - a misdeclaration, not a disagreement."
+            )
+        elif unattested and strict:
+            detail = (
+                f" {', '.join(unattested)} carry no independent attestation, and the active policy "
+                f"is STRICT_CATALOG_ATTESTATION."
+            )
 
         return self._proof(
             auth, tx, prefix="proof_drift",
@@ -337,32 +484,48 @@ class DTLInvariantEngine:
             dimension=AuthorityDimension.PURPOSE.value,
             severity="CRITICAL",
             authorized=f"{auth.economic_purpose} (budget ₹{auth.global_budget_ceiling:,.2f})",
-            actual=(f"Purchased liquid stored-value instruments ({', '.join(violated_skus)}) "
+            actual=(f"Basket contains attested liquid-value instruments ({', '.join(violated_skus)}) "
                     f"under MCC {tx.merchant_mcc}"),
-            drift_score=0.95,
-            expression="ASSERT cart.items.category NOT IN semantic_exclusions",
+            # Magnitude = the SHARE of cart value that is outside the purpose.
+            # A Rs 300 voucher inside a Rs 9,000 grocery run is real drift, and
+            # meaningfully less drift than a near-total conversion.
+            drift_score=round(min(1.0, max(0.1, sum(
+                i.unit_price * i.quantity for i in tx.items if i.sku in violated_skus
+            ) / max(1.0, float(tx.amount)))), 4),
+            expression="ASSERT attested_category(sku) NOT IN semantic_exclusions",
             explanation=(
                 f"Transaction passes the local rail MCC check ({tx.merchant_mcc}) but converts the "
-                f"authorised budget into liquid stored value ({', '.join(violated_skus)}). "
-                f"Amount, rail and merchant category are all within the grant; the economic "
-                f"substance of the basket is not."
+                f"authorised budget into liquid value ({', '.join(violated_skus)}). Amount, rail and "
+                f"merchant category are all within the grant; the economic substance of the basket "
+                f"is not. Decided on independent attestation rather than the merchant's own label - "
+                f"{'; '.join(bases)}.{detail}"
             ),
             violated_skus=violated_skus,
         )
 
     def _check_global_budget(self, auth, tx, now) -> Optional[SemanticDriftProof]:
         """INV_01 - AMOUNT. The cross-rail aggregate no single rail can compute."""
+        # Evaluated against the EFFECTIVE ceiling, so TIGHTENED_HEADROOM_V2
+        # actually withholds headroom instead of only renaming the policy.
         new_exposure = auth.total_exposure_global + tx.amount
-        if new_exposure <= auth.global_budget_ceiling:
+        effective = auth.effective_ceiling
+        if new_exposure <= effective:
             return None
+        withheld = auth.global_budget_ceiling - effective
         return self._proof(
             auth, tx, prefix="proof_budget",
             code="INV_01_GLOBAL_BUDGET_EXCEEDED",
             dimension=AuthorityDimension.AMOUNT.value,
             severity="HIGH",
-            authorized=f"Total aggregate spend <= ₹{auth.global_budget_ceiling:,.2f}",
+            authorized=(
+                f"Total aggregate spend <= ₹{effective:,.2f}"
+                + (f" (₹{withheld:,.2f} of the ₹{auth.global_budget_ceiling:,.2f} grant withheld "
+                   f"by active policy {getattr(auth.active_policy, 'value', auth.active_policy)})"
+                   if withheld > 0 else "")
+            ),
             actual=f"Cross-rail split attempt pushing total exposure to ₹{new_exposure:,.2f}",
-            drift_score=0.85,
+            # Magnitude = the overshoot, relative to the grant.
+            drift_score=round(min(1.0, max(0.05, (new_exposure - effective) / max(1.0, effective))), 4),
             expression="ASSERT (cumulative_settled + authorized + pending + reserved + new_tx) <= global_budget_ceiling",
             explanation=(
                 f"Individually valid on {_rail_value(tx)} (₹{tx.amount:,.2f} sits inside that rail's "

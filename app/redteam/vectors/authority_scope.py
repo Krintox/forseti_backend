@@ -14,6 +14,36 @@ Each vector below carries the delegation profile it is designed to be run
 against, so the arena can re-grant the authority exactly as the user would have
 stated it and then show the agent stepping outside it. Without the profile the
 attack is meaningless - that pairing IS the demonstration.
+
+These vectors win by STIPULATION, and that is stated rather than implied
+--------------------------------------------------------------------------
+Adversarial review made this criticism of RAIL_SCOPE_VIOLATION and it applies to
+every vector in this file:
+
+    "It wins by construction and the write-up does not say so. The arena
+    re-grants the authority specifically to make the card leg illegal moments
+    before the card leg fires. That is a legitimate way to demonstrate a
+    dimension - but 'the delegation says otherwise' reads as discovery, when it
+    is stipulation."
+
+Correct, and worth being explicit about, because the distinction is the whole
+argument:
+
+- The VIOLATION is stipulated. The card leg is out of scope because the grant
+  says "UPI only". Of course it is - we wrote the grant. Nothing is discovered
+  about whether the transaction is anomalous, and nothing here should be
+  presented as detection.
+- The FAILURE is not stipulated. What the demonstration actually shows is that
+  the card rail APPROVES the leg: the token is valid, the merchant is fine, the
+  amount is ordinary, and the rail has no way to know a constraint was expressed
+  in terms of a rail it cannot see. That approval is a property of how payment
+  authorisation is partitioned, not something the profile arranges.
+
+So the honest one-line framing is "a rail cannot enforce a constraint expressed
+in terms of a rail it cannot see", NOT "our system detected an unauthorised
+rail". The arena emits the re-grant as a visible `AUTHORITY_GRANTED` event
+before the run for exactly this reason - the stipulation happens on screen,
+timestamped, rather than off it.
 """
 
 from typing import Any, Dict, List
@@ -100,11 +130,22 @@ class PerTransactionBreachVector:
     """
     Vector: Per-Transaction Authority (INV_05).
 
-    "Spend ₹12,000, but nothing above ₹3,000 in one go." Three ₹3,000 legs pass
-    exactly on the cap. The fourth transaction is ₹4,000: aggregate exposure
-    would reach ₹13,000, but even at ₹9,000 spent the single-transaction bound
-    is the binding constraint. The response is a step-up, not a decline - the
-    agent keeps transacting up to ₹3,000 while the user approves the outlier.
+    "Spend ₹12,000, but nothing above ₹3,000 in one go."
+
+    Three legs of exactly ₹3,000 pass on the cap, then a fourth of ₹4,000
+    breaches it. Aggregate exposure reaches ₹13,000, so BOTH the per-transaction
+    bound and the ceiling are implicated - and the point of the vector is which
+    one binds first, and why the response differs.
+
+    DOCSTRING/CODE RECONCILIATION. This description previously stated three
+    ₹3,000 legs and a ₹13,000 total while the loop ran `range(1, 3)` - two legs,
+    ₹10,000 against a ₹12,000 ceiling, so the aggregate was never touched and
+    the "even at ₹9,000 spent" argument was untested. It was the third docstring
+    in this file whose numbers did not match its own loop bound; at that point
+    it stops being sloppiness. The code now produces what the text claims.
+
+    The response is a step-up, not a decline - the agent keeps transacting up to
+    ₹3,000 while the user approves the outlier.
     """
 
     authority_profile = PER_TX_CAPPED_PROFILE
@@ -126,7 +167,7 @@ class PerTransactionBreachVector:
                 is_anomalous_red_attack=False,
                 attack_primitive_type="PER_TX_BREACH",
             )
-            for i in range(1, 3)
+            for i in range(1, 4)
         ]
         txs.append(
             SyntheticTransaction(

@@ -15,9 +15,18 @@ class PaymentSimulatorEngine:
     """
     def __init__(self, event_log: Optional[AppendOnlyEventLog] = None):
         self.event_log = event_log or AppendOnlyEventLog()
+        # Each rail carries the limits its real counterpart actually enforces,
+        # not a uniform placeholder. UPI Circle in particular mandates
+        # Rs 5,000/transaction and Rs 15,000/month for a delegated secondary
+        # user; modelling it at a flat Rs 10,000 with no per-transaction cap
+        # made the simulated rail MORE permissive than the real one and let the
+        # project claim a control the real scheme already ships.
         self.adapters: Dict[PaymentRailType, BaseRailAdapter] = {
             PaymentRailType.CARD_TOKEN: CardTokenAdapter(local_limit=10000.0),
-            PaymentRailType.UPI_CIRCLE: UpiCircleAdapter(local_limit=10000.0),
+            PaymentRailType.UPI_CIRCLE: UpiCircleAdapter(
+                local_limit=UpiCircleAdapter.SCHEME_MONTHLY_LIMIT,
+                per_tx_limit=UpiCircleAdapter.SCHEME_PER_TX_LIMIT,
+            ),
             PaymentRailType.AGENTIC_AP2: AgenticAp2Adapter(local_limit=10000.0)
         }
         self.transactions: Dict[str, SyntheticTransaction] = {}

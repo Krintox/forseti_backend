@@ -27,6 +27,81 @@ class DefensePolicy(str, Enum):
     STEP_UP_VERIFICATION = "STEP_UP_VERIFICATION" # Step-up biometric check
     AGENT_SUSPENDED = "AGENT_SUSPENDED" # Mandate paused pending re-consent after repeated offenses
 
+# Policy overlay constants. Module-level so POLICY_LADDER can quote the real
+# numbers instead of restating them in prose.
+DTL_POLICY_HEADROOM_BUFFER_PCT = 0.10
+DTL_POLICY_STEP_UP_PER_TX = 2000.0
+DTL_POLICY_QUARANTINED_PER_TX = 1000.0
+
+
+# The escalation ladder, in the order Blue climbs it. The frontend used to keep
+# its own hand-written copy of this list; it drifted, and AGENT_SUSPENDED - the
+# TOP rung, the one that matters most - rendered as no active policy at all.
+# Serving the ladder from the enum makes that class of drift impossible.
+POLICY_LADDER: List[Dict[str, Any]] = [
+    {
+        "code": DefensePolicy.STANDARD.value,
+        "rung": 0,
+        "description": "Baseline. Per-rail checks only, no global aggregation.",
+        "enforced_effect": "No overlay - the granted authority is enforced as written.",
+    },
+    {
+        "code": DefensePolicy.STRICT_INVARIANT.value,
+        "rung": 1,
+        "description": (
+            "All seven authority-dimension invariants (amount, per-transaction, rail, "
+            "merchant, beneficiary, purpose, time) are enforced on every transaction."
+        ),
+        "enforced_effect": "No overlay - but every dimension is now checked, not just amount.",
+    },
+    {
+        "code": DefensePolicy.ADAPTIVE_CONTAINMENT.value,
+        "rung": 2,
+        "description": "Partial authorisation and shadow execution are active.",
+        "enforced_effect": "Breaching transactions are trimmed to headroom rather than declined outright.",
+    },
+    {
+        "code": DefensePolicy.TIGHTENED_HEADROOM_V2.value,
+        "rung": 3,
+        "description": "Headroom buffer reduced after a budget-ceiling breach.",
+        "enforced_effect": (
+            f"Effective ceiling = {int(DTL_POLICY_HEADROOM_BUFFER_PCT * 100)}% below the granted ceiling."
+        ),
+    },
+    {
+        "code": DefensePolicy.STRICT_CATALOG_ATTESTATION.value,
+        "rung": 4,
+        "description": "Item-level attestation required after semantic drift.",
+        "enforced_effect": "Baskets must resolve against the attested SKU catalogue, not merchant free text.",
+    },
+    {
+        "code": DefensePolicy.STEP_UP_VERIFICATION.value,
+        "rung": 5,
+        "description": (
+            "Secondary verification required before authorisation - used for "
+            "per-transaction cap breaches and lapsed mandates."
+        ),
+        "enforced_effect": f"Effective per-transaction cap tightened to ₹{int(DTL_POLICY_STEP_UP_PER_TX):,}.",
+    },
+    {
+        "code": DefensePolicy.CAPABILITY_QUARANTINED.value,
+        "rung": 6,
+        "description": "Agent spending capability has been downgraded after a violation.",
+        "enforced_effect": f"Effective per-transaction cap tightened to ₹{int(DTL_POLICY_QUARANTINED_PER_TX):,}.",
+    },
+    {
+        "code": DefensePolicy.AGENT_SUSPENDED.value,
+        "rung": 7,
+        "description": "Mandate paused pending re-consent after repeated offences.",
+        "enforced_effect": "No spend of any size is authorised until the principal re-consents.",
+    },
+]
+
+assert {r["code"] for r in POLICY_LADDER} == {p.value for p in DefensePolicy}, (
+    "POLICY_LADDER must cover every DefensePolicy member exactly once"
+)
+
+
 class AuthorityDimension(str, Enum):
     """
     The dimensions a user's delegated authority is expressed in.
@@ -148,6 +223,71 @@ class DTLGlobalAuthorityState(BaseModel):
         if not self.beneficiary_scope:
             return True
         return beneficiary is not None and beneficiary in self.beneficiary_scope
+
+    # ------------------------------------------------ active-policy overlay
+    #
+    # The Blue team's escalation ladder used to write `active_policy` and a set
+    # of knobs (`headroom_buffer_pct`, `require_step_up`,
+    # `require_sku_attestation`) that NOTHING READ. A grep for readers returned
+    # display strings and the PQC payload - no authorization check consulted
+    # any of them. An agent whose mandate was "suspended" transacted exactly as
+    # before, which made the whole three-rung ladder a label change.
+    #
+    # This overlay is what makes the ladder real: it maps the active policy to
+    # the constraints ACTUALLY ENFORCED, and the invariant engine evaluates
+    # against these rather than the raw grant.
+
+    # Headroom withheld under TIGHTENED_HEADROOM_V2 (matches the 0.10 the
+    # policy adapter has always written into its `changes` dict).
+    POLICY_HEADROOM_BUFFER_PCT: float = DTL_POLICY_HEADROOM_BUFFER_PCT
+    # Above this, a single transaction needs human step-up under
+    # STEP_UP_VERIFICATION. Below it the agent keeps working uninterrupted,
+    # which is the containment-without-lockout principle.
+    POLICY_STEP_UP_PER_TX: float = DTL_POLICY_STEP_UP_PER_TX
+    # Capability quarantine leaves the agent able to transact, but small.
+    POLICY_QUARANTINED_PER_TX: float = DTL_POLICY_QUARANTINED_PER_TX
+
+    @property
+    def policy_suspends_all_spend(self) -> bool:
+        """AGENT_SUSPENDED means exactly that: nothing is authorised."""
+        return self.active_policy == DefensePolicy.AGENT_SUSPENDED
+
+    @property
+    def effective_ceiling(self) -> float:
+        """The ceiling as the ACTIVE POLICY enforces it."""
+        if self.active_policy == DefensePolicy.TIGHTENED_HEADROOM_V2:
+            return round(self.global_budget_ceiling * (1.0 - self.POLICY_HEADROOM_BUFFER_PCT), 2)
+        return self.global_budget_ceiling
+
+    @property
+    def effective_per_transaction_cap(self) -> Optional[float]:
+        """
+        The per-transaction bound after the policy overlay. The tightest of
+        the user's own cap and anything the policy imposes.
+        """
+        caps = [c for c in (
+            self.per_transaction_cap,
+            self.POLICY_QUARANTINED_PER_TX
+            if self.active_policy == DefensePolicy.CAPABILITY_QUARANTINED else None,
+            self.POLICY_STEP_UP_PER_TX
+            if self.active_policy == DefensePolicy.STEP_UP_VERIFICATION else None,
+        ) if c is not None]
+        return min(caps) if caps else None
+
+    def policy_overlay(self) -> Dict[str, Any]:
+        """What the active policy currently changes, for the UI and events."""
+        return {
+            "active_policy": str(getattr(self.active_policy, "value", self.active_policy)),
+            "suspends_all_spend": self.policy_suspends_all_spend,
+            "granted_ceiling": round(self.global_budget_ceiling, 2),
+            "effective_ceiling": round(self.effective_ceiling, 2),
+            "ceiling_withheld": round(self.global_budget_ceiling - self.effective_ceiling, 2),
+            "granted_per_transaction_cap": self.per_transaction_cap,
+            "effective_per_transaction_cap": self.effective_per_transaction_cap,
+            "requires_sku_attestation": (
+                self.active_policy == DefensePolicy.STRICT_CATALOG_ATTESTATION
+            ),
+        }
 
     def authority_vector(self, now: Optional[datetime] = None) -> Dict[str, Any]:
         """

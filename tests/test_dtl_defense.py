@@ -18,7 +18,7 @@ def test_intent_laundering_detection_and_partial_auth():
     assert is_valid is False
     assert proof is not None
     assert proof.invariant_code == "INV_02_SEMANTIC_INTENT_DRIFT"
-    assert "SKU_GIFT_AMZN_8500" in proof.violated_skus
+    assert "SKU_GIFT_DIGITAL" in proof.violated_skus
     
     # Test graceful containment
     contained_tx, action_msg = governor.apply_containment(auth, tx, proof)

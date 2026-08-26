@@ -1,5 +1,5 @@
 """
-Settlement Reconciliation Engine (Kill Chain stages 10-11).
+Settlement Reconciliation Checks (Kill Chain stages 10-11).
 
 Everything in dtl/invariant_engine.py answers "was this ONE transaction
 authorised, evaluated against the grant as it stood at that moment?" That
@@ -30,12 +30,41 @@ Two distinct failure modes are modelled, matching Kill Chain stages 10 and 11:
 
 Both are deterministic set/count checks over `obligation_id`-linked legs,
 exactly like an invariant - nothing here is learned or estimated.
+
+WHAT IS AND IS NOT NOVEL HERE - read this before calling it an "engine".
+
+Duplicate-settlement detection by shared identifier is IDEMPOTENCY, and it is
+table stakes: Stripe, Adyen, Square and every orchestration vendor ship
+idempotency keys, and Adyen additionally enforces that captures cannot exceed
+the authorised amount and refunds cannot exceed the capture. Calling that
+"Kill Chain stage 11" does not make it research, and this module should not be
+presented as though it invented duplicate detection.
+
+Two things here are genuinely not what an idempotency key does:
+
+  1. The key is a BUSINESS-LEVEL obligation, not a client-supplied request id.
+     The documented weakness of idempotency keys is precisely that a different
+     key makes the same transaction look new - a buggy retry or a deliberate
+     one simply mints a fresh key. Grouping on `obligation_id` asks "is this
+     the same economic obligation", which a request-scoped key cannot.
+  2. The check is CROSS-RAIL and tied to delegated authority. No single
+     processor sees both a card capture and a UPI refund for one obligation,
+     so no single processor's idempotency layer can detect the conflict at all
+     - and the containment releases DELEGATED AUTHORITY, which an idempotency
+     key has no concept of.
+
+WHAT IS NOT MODELLED, stated plainly so nobody has to discover it: partial
+captures, late presentment, representments, chargebacks, multi-currency,
+settlement cut-off windows, tolerance bands, and ARN/RRN/BatchID matching.
+Real reconciliation is a discipline; this is two deterministic checks over an
+obligation identifier, and the honest label is "reconciliation CHECKS", not a
+reconciliation engine.
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..models.proofs import SettlementReconciliationProof
 from ..models.state import DTLGlobalAuthorityState
@@ -175,31 +204,78 @@ def detect_reconciliation_drift(
 def evaluate_all(
     auth: DTLGlobalAuthorityState, txs: List[SyntheticTransaction]
 ) -> List[SettlementReconciliationProof]:
-    """Runs both reconciliation checks; a round can trip at most one of each."""
+    """
+    Runs both checks across EVERY obligation in the batch.
+
+    Previously each detector returned on its first match, so a batch containing
+    three separately-conflicting obligations reported one and the other two
+    passed silently. Grouping first and evaluating per obligation means the
+    result is complete rather than "the first thing we noticed".
+    """
     proofs: List[SettlementReconciliationProof] = []
-    for detector in (detect_settlement_conflict, detect_reconciliation_drift):
-        result = detector(auth, txs)
-        if result is not None:
-            proofs.append(result)
+    for obligation_id, legs in _group_by_obligation(txs).items():
+        for detector in (detect_settlement_conflict, detect_reconciliation_drift):
+            result = detector(auth, legs)
+            if result is not None:
+                proofs.append(result)
     return proofs
 
 
-def apply_settlement_containment(proof: SettlementReconciliationProof) -> str:
+def apply_settlement_containment(
+    proof: SettlementReconciliationProof,
+    ledger: Optional[Any] = None,
+    authority_id: Optional[str] = None,
+) -> str:
     """
     Proportionate response, mirroring dtl/cost_governor.py's style: the
-    smallest action that resolves the inconsistency without touching
-    authority the obligation never even implicated.
+    smallest action that resolves the inconsistency without touching authority
+    the obligation never even implicated.
+
+    THIS NOW CHANGES STATE. It previously returned a formatted string and
+    touched nothing - the RECON_02 message asserted "excess settlement
+    application(s) are reversed" and "the reconciled total is restored", and a
+    trace before/after showed exposure unchanged at Rs 10,000.00 both times.
+    The UI then rendered that sentence at success severity as the outcome of
+    the round. A judge asking "so what is the agent's remaining headroom after
+    containment?" got the same number as before.
+
+    `ledger`/`authority_id` are optional so the pure detection path stays
+    testable without a ledger, but when they are supplied the reversal is
+    real and the returned sentence describes something that happened.
     """
+    can_act = ledger is not None and authority_id is not None
+
     if proof.conflict_code == "RECON_01_SETTLEMENT_CONFLICT":
+        # The conflicting leg is frozen: its exposure is released so it cannot
+        # move further, while the original capture stands pending manual
+        # reconciliation between the two rails' ledgers.
+        released = (
+            ledger.credit_refund(authority_id, proof.economic_exposure_at_risk)
+            if can_act else 0.0
+        )
+        applied = (
+            f" Rs {released:,.2f} of exposure released and frozen against obligation "
+            f"{proof.obligation_id}."
+            if can_act else
+            " (detection-only call: no ledger supplied, so no state was changed.)"
+        )
         return (
             f"SETTLEMENT_HOLD: obligation {proof.obligation_id} frozen pending manual "
-            f"reconciliation - the conflicting cross-rail leg is held, the original capture is "
-            f"not disturbed, and Rs {proof.economic_exposure_at_risk:,.2f} is quarantined from "
-            f"further movement until the two rails' ledgers are reconciled."
+            f"reconciliation - the conflicting cross-rail leg is held and the original capture "
+            f"is not disturbed.{applied}"
         )
+
+    reversed_amt = (
+        ledger.credit_refund(authority_id, proof.economic_exposure_at_risk)
+        if can_act else 0.0
+    )
+    applied = (
+        f" Rs {reversed_amt:,.2f} of over-recognised exposure removed; the reconciled total is "
+        f"back to the single authorised obligation amount."
+        if can_act else
+        " (detection-only call: no ledger supplied, so no state was changed.)"
+    )
     return (
         f"DUPLICATE_SETTLEMENT_REVERSED: obligation {proof.obligation_id}'s excess settlement "
-        f"application(s) are reversed; Rs {proof.economic_exposure_at_risk:,.2f} of "
-        f"over-recognised exposure is removed and the reconciled total is restored to the single "
-        f"authorised obligation amount."
+        f"application(s) are reversed.{applied}"
     )

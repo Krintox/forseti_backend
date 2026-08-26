@@ -53,8 +53,8 @@ class TestScoreRound:
         assert kc["stage"]["code"] == "CROSS_RAIL_SPLIT"
         assert kc["contained"] is True
         assert kc["attack_chain_score"] > 0.0
-        assert kc["time_to_detection_ms"] is not None
-        assert kc["time_to_detection_ms"] >= 0
+        assert kc["wall_clock_to_detection_ms_presentation_paced"] is not None
+        assert kc["wall_clock_to_detection_ms_presentation_paced"] >= 0
 
     def test_economic_exposure_prevented_matches_the_violation_overshoot(self):
         result = self._run(2)
@@ -86,7 +86,7 @@ class TestScoreRound:
         assert len(orch.recorder.events) > len(r2["step_results"]) * 6  # recorder really did accumulate
         assert r2["kill_chain"]["stage"]["code"] == "DELEGATION_ABUSE"  # LAPSED_MANDATE's stage
         # round 2's own detection latency, not inflated by round 1's history
-        assert r2["kill_chain"]["time_to_detection_ms"] < 5000
+        assert r2["kill_chain"]["wall_clock_to_detection_ms_presentation_paced"] < 5000
 
 
 class TestCoverage:

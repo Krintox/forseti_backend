@@ -276,6 +276,148 @@ def run_baseline_condition(
     return results
 
 
+
+
+def wilson_interval(successes: int, n: int, z: float = 1.96) -> Tuple[float, float]:
+    """
+    95% Wilson score interval for a binomial proportion.
+
+    Wilson rather than the normal approximation because n here is 64 and the
+    proportions run close to 0 and 1, where the normal interval is badly wrong
+    (it happily returns bounds above 1.0). Wilson stays inside [0, 1] and is the
+    standard recommendation for exactly this regime.
+    """
+    if n <= 0:
+        return (0.0, 0.0)
+    phat = successes / n
+    denom = 1.0 + z * z / n
+    centre = (phat + z * z / (2 * n)) / denom
+    margin = (z / denom) * ((phat * (1 - phat) / n + z * z / (4 * n * n)) ** 0.5)
+    return (round(max(0.0, centre - margin), 4), round(min(1.0, centre + margin), 4))
+
+
+def recall_with_ci(entry: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Attaches a 95% CI to a per-family recall, so the number can be read honestly."""
+    if not entry or entry.get("recall") is None or not entry.get("n"):
+        return None
+    n = int(entry["n"])
+    recall = float(entry["recall"])
+    successes = int(round(recall * n))
+    low, high = wilson_interval(successes, n)
+    return {
+        "recall": round(recall, 4),
+        "n": n,
+        "caught": successes,
+        "ci95": [low, high],
+        "ci95_halfwidth": round((high - low) / 2, 4),
+    }
+
+
+def _overlap(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    """True when two intervals overlap - i.e. the difference is not resolvable."""
+    if not a or not b:
+        return True
+    return a["ci95"][0] <= b["ci95"][1] and b["ci95"][0] <= a["ci95"][1]
+
+
+def _headline_claim(held_out: Dict[str, Any], seen: Dict[str, Any],
+                    ci: Optional[Dict[str, Any]] = None) -> str:
+    """
+    Writes the headline sentence FROM the measured recalls, and refuses to claim
+    a difference the sample size cannot support.
+
+    The interesting property is not "ML fails" - with a cross-rail feature and
+    the family in training, a classifier does fine. It is that the invariant is
+    holdout-independent: its held-out and seen numbers are the SAME number,
+    because it is arithmetic over the grant rather than a fitted decision
+    surface.
+
+    The cross-rail slice is n=64. At that size a 95% Wilson interval on a recall
+    near 0.83 is roughly +/-0.09, so a gap of 0.016 between held-out and seen is
+    inside the noise and saying "it generalised, within 0.016" would be
+    overclaiming on our own data. The sentence below says only what n supports,
+    and names n so the reader can check.
+    """
+    def g(table: Dict[str, Any], key: str) -> Optional[float]:
+        value = table.get(key)
+        return round(float(value), 4) if isinstance(value, (int, float)) else None
+
+    inv_out, inv_seen = g(held_out, "dtl_invariant_only"), g(seen, "dtl_invariant_only")
+    ml_out, ml_seen = g(held_out, "hybrid_dtl_ml"), g(seen, "hybrid_dtl_ml")
+    blind_out = g(held_out, "ml_without_dtl")
+
+    if None in (inv_out, inv_seen, ml_out, ml_seen, blind_out):
+        return "Cross-rail recall could not be computed for this run."
+
+    holdout_independent = abs(inv_out - inv_seen) < 1e-9
+
+    n = None
+    ml_gap_resolvable = None
+    ml_beats_blind = None
+    if ci:
+        ml_o, ml_s = ci.get("held_out", {}).get("hybrid_dtl_ml"), ci.get("seen", {}).get("hybrid_dtl_ml")
+        blind_o = ci.get("held_out", {}).get("ml_without_dtl")
+        if ml_o:
+            n = ml_o["n"]
+        if ml_o and ml_s:
+            ml_gap_resolvable = not _overlap(ml_o, ml_s)
+        if ml_o and blind_o:
+            ml_beats_blind = not _overlap(ml_o, blind_o)
+
+    parts = [
+        f"The deterministic DTL aggregate-authority invariant scores {inv_out:.4f} on "
+        f"CROSS_RAIL_SPLIT whether or not the family was in training "
+        f"({inv_seen:.4f} seen), because it is arithmetic over the delegated grant"
+        + (" - holdout-independent by construction, so this is an identity rather than "
+           "a measurement that happened to come out equal."
+           if holdout_independent
+           else ", and this run measured a difference between the two, which should not happen."),
+    ]
+
+    blind_sentence = (
+        f"A model WITHOUT a cross-rail view reaches only {blind_out:.4f} held out: one leg "
+        f"genuinely looks like ordinary spending, so the signal is not in the transaction."
+    )
+    if ml_beats_blind is True:
+        blind_sentence += (
+            f" That gap against hybrid ML's {ml_out:.4f} is wider than the 95% intervals at "
+            f"n={n}, so it is a real separation and not sampling noise."
+        )
+    elif ml_beats_blind is False:
+        blind_sentence += (
+            f" At n={n} the 95% intervals still overlap hybrid ML's {ml_out:.4f}, so this run "
+            f"does not establish the separation on its own."
+        )
+    parts.append(blind_sentence)
+
+    ml_sentence = (
+        f"Given DTL aggregate features, hybrid ML reaches {ml_out:.4f} held out against "
+        f"{ml_seen:.4f} seen"
+    )
+    if ml_gap_resolvable is False:
+        ml_sentence += (
+            f" - a difference of {abs(ml_seen - ml_out):.4f} that the 95% intervals at n={n} "
+            f"cannot resolve. The honest reading is that this run does not show the classifier "
+            f"degrading on an unseen family; it does NOT show that it never would, and a "
+            f"held-out result this close should not be presented as proven generalisation."
+        )
+    elif ml_gap_resolvable is True:
+        ml_sentence += (
+            f" - a gap the 95% intervals at n={n} do resolve, so the classifier measurably "
+            f"lost ground on the family it had not seen."
+        )
+    else:
+        ml_sentence += "."
+    parts.append(ml_sentence)
+
+    parts.append(
+        "The asymmetry is the point and it does not depend on the sample size: the invariant's "
+        "two numbers are equal BY CONSTRUCTION, while the classifier's are two separate "
+        "measurements that happen to be close on this run."
+    )
+    return " ".join(parts)
+
+
 def run_baseline_experiments(
     seed: int = 42,
     num_samples: int = 20000,
@@ -301,6 +443,29 @@ def run_baseline_experiments(
     cond_b = run_baseline_condition(seed=seed, num_samples=num_samples, fraud_ratio=fraud_ratio,
                                     holdout_families=[])
 
+    # 95% Wilson intervals for the cross-rail slice, per architecture and per
+    # condition. `_fam_ci` reaches back into the raw per-family counts rather
+    # than the rounded recall so `caught` is exact.
+    def _fam_ci(condition: Dict[str, Any]) -> Dict[str, Any]:
+        out: Dict[str, Any] = {}
+        for variant in ("rules_only", "per_rail_ml", "ml_without_dtl",
+                        "hybrid_dtl_ml", "dtl_invariant_only"):
+            entry = (condition["baselines"].get(variant, {})
+                     .get("per_family_recall", {}).get("CROSS_RAIL_SPLIT"))
+            band = recall_with_ci(entry)
+            if band is not None:
+                out[variant] = band
+        return out
+
+    cross_rail_ci = {
+        "method": "Wilson score interval, 95%",
+        "why": ("The cross-rail slice is small. A point estimate alone invites a "
+                "comparison between two architectures that the sample size cannot "
+                "support, so the interval ships with the number."),
+        "held_out": _fam_ci(cond_a),
+        "seen": _fam_ci(cond_b),
+    }
+
     combined = {
         "metadata": {
             "experiment_id": f"BASELINE-SUITE-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}",
@@ -318,10 +483,27 @@ def run_baseline_experiments(
         "baselines": cond_a["baselines"],
         "measured_dtl_lift": cond_b["measured_dtl_lift"],
         "headline_finding": {
-            "claim": "Per-transaction ML cannot detect cross-rail splitting; the deterministic "
-                     "DTL aggregate-authority invariant is what catches it.",
+            # DERIVED from the numbers beside it, never asserted.
+            #
+            # This field used to be a hardcoded sentence - "per-transaction ML
+            # cannot detect cross-rail splitting" - that stayed word for word
+            # identical no matter what the run measured. When the MCC leak was
+            # fixed and hybrid ML went from 0.000 to 0.828 held out, the claim
+            # did not move, and the artifact ended up asserting something its
+            # own data contradicted. Adversarial review found that before we
+            # did. A sentence generated from the measurement cannot drift from
+            # it.
+            "claim": _headline_claim(
+                cond_a["measured_dtl_lift"]["cross_rail_split_recall"],
+                cond_b["measured_dtl_lift"]["cross_rail_split_recall"],
+                ci=cross_rail_ci,
+            ),
             "cross_rail_split_recall_when_family_held_out": cond_a["measured_dtl_lift"]["cross_rail_split_recall"],
             "cross_rail_split_recall_when_family_seen": cond_b["measured_dtl_lift"]["cross_rail_split_recall"],
+            # The cross-rail slice is small (n is reported per row). Publishing
+            # the point estimate alone invited a comparison the sample size does
+            # not support, so the intervals ship with it.
+            "cross_rail_split_recall_ci95": cross_rail_ci,
             "dtl_pr_auc_lift_when_family_seen": cond_b["measured_dtl_lift"]["pr_auc_lift"],
         },
     }

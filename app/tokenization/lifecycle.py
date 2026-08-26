@@ -26,9 +26,14 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
+from ..dtl.invariant_engine import DTLInvariantEngine
 from ..models.state import DTLGlobalAuthorityState, PaymentRailType
 from ..models.transactions import SyntheticTransaction
 from .models import TERMINAL_STATUSES, TokenizedPaymentCredential, TokenScopeViolation, TokenStatus
+
+# Stateless - one shared instance is correct and avoids re-constructing the
+# engine on every token use.
+_INVARIANTS = DTLInvariantEngine()
 
 
 def _violation(token_id: str, *, code: str, explanation: str, tx_id: Optional[str] = None) -> TokenScopeViolation:
@@ -181,26 +186,34 @@ def use_token(
                         f"Rs {token.remaining_ceiling:,.2f} (of {token.amount_ceiling:,.2f} total).",
         )
 
-    # ---- the LIVE DTL authority behind the token - the enforcement point
-    # that makes this a scoped VIEW onto the delegation rather than a second,
-    # independent grant. A token minted when the delegation was generous does
-    # not survive that delegation later being tightened or revoked.
-    if not auth.allows_rail(tx.rail):
+    # ---- the LIVE DTL authority behind the token.
+    #
+    # This is the enforcement point that makes a token a scoped VIEW onto a
+    # delegation rather than a second, independent grant. It runs the FULL
+    # invariant engine - the same object the arena uses - rather than a
+    # hand-picked subset.
+    #
+    # It previously checked exactly two things: rail scope and headroom. The
+    # docstring claimed a token "cannot authorize an action outside its
+    # delegation even if that delegation has since been tightened or revoked",
+    # and that claim was false for five of the seven dimensions. An expired
+    # delegation demonstrably still authorised spend through this path,
+    # because the token carried its OWN frozen `expires_at` and nothing ever
+    # consulted `auth.is_expired()`.
+    #
+    # Re-implementing a subset of the invariants here was the bug. Delegating
+    # to the engine means the token layer cannot drift from the DTL again, and
+    # any invariant added later is enforced here for free.
+    violations = _INVARIANTS.evaluate_all(auth, tx)
+    if violations:
         token.status = TokenStatus.ACTIVE
+        breached = ", ".join(v.invariant_code for v in violations)
+        first = violations[0]
         return False, _violation(
             token.token_id, tx_id=tx.tx_id, code="TOKEN_EXCEEDS_LIVE_DTL_AUTHORITY",
             explanation=(
-                f"Token's own scope permits {tx.rail.value if hasattr(tx.rail, 'value') else tx.rail}, but the "
-                f"LIVE delegation no longer does - it was narrowed after this token was issued."
-            ),
-        )
-    if tx.amount > auth.authority_headroom:
-        token.status = TokenStatus.ACTIVE
-        return False, _violation(
-            token.token_id, tx_id=tx.tx_id, code="TOKEN_EXCEEDS_LIVE_DTL_AUTHORITY",
-            explanation=(
-                f"Rs {tx.amount:,.2f} is within the token's own ceiling, but the live delegation has only "
-                f"Rs {auth.authority_headroom:,.2f} of headroom remaining."
+                f"The token's own scope permits this action, but the LIVE delegation does not: "
+                f"{breached}. {first.explanation}"
             ),
         )
 

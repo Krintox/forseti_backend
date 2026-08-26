@@ -7,7 +7,24 @@ from datetime import datetime
 class CardTokenAdapter(BaseRailAdapter):
     """
     Card-Tokenization-Inspired Synthetic Adapter.
-    Models tokenized DPAN validation, single-transaction & local cycle limits, and MCC scoping.
+
+    Models tokenized DPAN validation, single-transaction & local cycle limits,
+    and MCC scoping at the token.
+
+    NOTE ON WHAT IS AND IS NOT NOVEL HERE. Merchant-category restriction on a
+    network token is a real, shipped, commercially available control - it is
+    set at PROVISIONING time and Mastercard sells the product that does it.
+    This adapter therefore enforces it, and FORSETI must not claim MCC scope as
+    something "only the delegation knows": the rail in this very repository
+    checks it, twenty lines from here.
+
+    Two things remain genuinely unsolved, and those are INV_03's actual scope:
+      * the other two rails here (UPI Circle, agentic AP2) have no MCC concept
+        at all, so a category bound expressed by the USER is unenforceable on
+        them;
+      * a token's allow-list is fixed at provisioning. If the principal
+        NARROWS their delegation afterwards, no rail re-scopes the already
+        issued token.
     """
     def __init__(self, local_limit: float = 10000.0):
         super().__init__(PaymentRailType.CARD_TOKEN.value, local_limit)
@@ -22,14 +39,25 @@ class CardTokenAdapter(BaseRailAdapter):
         if (self.local_spent + tx.amount) > self.local_limit:
             return False, f"LOCAL_CARD_REJECT: Amount ₹{tx.amount} would take this cycle\'s rail spend to ₹{self.local_spent + tx.amount:.2f}, past the local card ceiling ₹{self.local_limit:.2f}"
 
-        # 3. Check digital signature / cryptogram
+        # 3. Signature presence check.
+        #
+        # Deliberately NOT described as a cryptogram verification. This is a
+        # substring test against a field the simulator sets, and there is no
+        # EMV cryptogram, no ARQC, no key, and nothing to verify against - so
+        # calling it "Valid token cryptogram" on screen (as this previously
+        # did) asserted a check that never happened. The synthetic rails model
+        # authorization LOGIC, not payment cryptography; the only genuine
+        # cryptography in this project is the ML-DSA-44 audit layer.
         if not tx.client_signature or "invalid" in tx.client_signature:
-            return False, "LOCAL_CARD_REJECT: Invalid cryptographic token signature"
+            return False, "LOCAL_CARD_REJECT: missing or malformed client signature field"
 
         # Success locally
         self.local_spent += tx.amount
         tx.local_rail_status = "APPROVED_LOCALLY"
-        tx.local_rail_message = "Valid token cryptogram, permitted MCC 5411, within local card limit"
+        tx.local_rail_message = (
+            f"Signature field present, MCC {tx.merchant_mcc} inside this token's provisioned "
+            f"scope, within local card cycle limit ₹{self.local_limit:,.0f}"
+        )
         tx.state = TransactionState.AUTHORIZED
         tx.authorized_at = datetime.utcnow()
         return True, tx.local_rail_message
