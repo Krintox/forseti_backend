@@ -102,6 +102,31 @@ assert {r["code"] for r in POLICY_LADDER} == {p.value for p in DefensePolicy}, (
 )
 
 
+
+_POLICY_RUNG: Dict[str, int] = {row["code"]: row["rung"] for row in POLICY_LADDER}
+
+
+def policy_rung(policy: Any) -> int:
+    """Severity index of a policy on the escalation ladder. Unknown -> 0."""
+    return _POLICY_RUNG.get(str(getattr(policy, "value", policy)), 0)
+
+
+def stricter_policy(current: Any, proposed: Any) -> "DefensePolicy":
+    """
+    Containment never relaxes in response to a NEW violation.
+
+    Blue used to assign the policy a violation indicated, unconditionally. So an
+    agent suspended after three rail breaches could trigger a single, different,
+    first-occurrence violation and be handed STEP_UP_VERIFICATION - dropping
+    four rungs and resuming spend. A fresh breach must never be a route out of
+    containment.
+
+    Lowering the rung is a decision only the principal makes, by re-consenting
+    (which resets the authority), never a side effect of misbehaving again.
+    """
+    return current if policy_rung(current) >= policy_rung(proposed) else proposed
+
+
 class AuthorityDimension(str, Enum):
     """
     The dimensions a user's delegated authority is expressed in.

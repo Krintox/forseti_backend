@@ -3,6 +3,7 @@ from .base import BaseRailAdapter
 from ...models.transactions import SyntheticTransaction
 from ...models.state import TransactionState, PaymentRailType
 from datetime import datetime
+from ..client_signing import verify as verify_client_signature
 
 class UpiCircleAdapter(BaseRailAdapter):
     """
@@ -67,8 +68,14 @@ class UpiCircleAdapter(BaseRailAdapter):
         # field alone and let the DTL decide.
 
         # 3. Check digital signature
-        if not tx.client_signature or "invalid" in tx.client_signature:
-            return False, "LOCAL_UPI_REJECT: Invalid device MPIN / signature token"
+        # A REAL check: recompute the HMAC over the canonical economic
+        # content of this transaction. Previously this was `"invalid" in
+        # tx.client_signature` - a substring test on a field the
+        # transaction set about itself, which no in-flight tampering
+        # could break. See simulator/client_signing.py.
+        signature_ok, signature_problem = verify_client_signature(tx)
+        if not signature_ok:
+            return False, f"LOCAL_UPI_REJECT: {signature_problem}"
 
         # Success locally
         self.local_spent += tx.amount

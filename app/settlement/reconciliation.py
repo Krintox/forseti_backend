@@ -201,11 +201,77 @@ def detect_reconciliation_drift(
     return None
 
 
+def detect_cross_rail_double_settlement(
+    auth: DTLGlobalAuthorityState, txs: List[SyntheticTransaction]
+) -> Optional[SettlementReconciliationProof]:
+    """
+    The gap the other two detectors left open.
+
+    RECON_01 fires on capture-vs-REFUND across rails. RECON_02 fires on a
+    duplicated capture on the SAME rail. Neither covers one authorised
+    obligation being CAPTURED on TWO DIFFERENT rails - which is the case this
+    module's own thesis is about, since no rail-local view can see it and the
+    money genuinely leaves twice.
+
+    Found by tracing the module rather than by a failing test: a Rs 4,000
+    obligation captured once on card and once on UPI returned zero proofs.
+    """
+    for obligation_id, legs in _group_by_obligation(txs).items():
+        captures = [t for t in legs if t.settlement_action in _CAPTURE_ACTIONS]
+        if len(captures) < 2:
+            continue
+
+        by_rail: Dict[str, List[SyntheticTransaction]] = {}
+        for t in captures:
+            by_rail.setdefault(_rail(t), []).append(t)
+        if len(by_rail) < 2:
+            continue  # single-rail duplication is RECON_02's case, not this one
+
+        ordered = sorted(captures, key=lambda t: t.tx_id)
+        first, excess = ordered[0], ordered[1:]
+        excess_total = sum(t.amount for t in excess)
+        settled_total = sum(t.amount for t in ordered)
+        rails = sorted(by_rail)
+
+        return SettlementReconciliationProof(
+            proof_id=f"proof_crossrail_{uuid.uuid4().hex[:8]}",
+            authority_id=auth.authority_id,
+            obligation_id=obligation_id,
+            conflict_code="RECON_03_CROSS_RAIL_DOUBLE_SETTLEMENT",
+            kill_chain_stage="RECONCILIATION_DRIFT",
+            severity="CRITICAL",
+            leg_tx_ids=[t.tx_id for t in ordered],
+            leg_summary=(
+                f"One obligation ({obligation_id}) was captured on {len(rails)} different rails "
+                f"({', '.join(rails)}) for Rs {settled_total:,.2f} in total."
+            ),
+            canonical_expectation=(
+                f"One authorised obligation settles exactly once, on one rail, for "
+                f"Rs {first.amount:,.2f}."
+            ),
+            observed_mismatch=(
+                f"Rs {settled_total:,.2f} settled across {', '.join(rails)} against an authorised "
+                f"obligation of Rs {first.amount:,.2f}. Rs {excess_total:,.2f} left the principal's "
+                f"account without a second authorisation behind it."
+            ),
+            economic_exposure_at_risk=round(excess_total, 2),
+            explanation=(
+                f"Each capture was locally correct: every rail saw a well-formed settlement "
+                f"instruction for an obligation it had authorised, and approved it. No rail could "
+                f"detect the duplication, because no rail can see the other's settlement ledger - "
+                f"this is the same blind spot as the cross-rail split, one stage later in the "
+                f"lifecycle. It is visible only to a party holding the obligation's canonical "
+                f"total across rails, which is what the DTL is."
+            ),
+        )
+    return None
+
+
 def evaluate_all(
     auth: DTLGlobalAuthorityState, txs: List[SyntheticTransaction]
 ) -> List[SettlementReconciliationProof]:
     """
-    Runs both checks across EVERY obligation in the batch.
+    Runs every check across EVERY obligation in the batch.
 
     Previously each detector returned on its first match, so a batch containing
     three separately-conflicting obligations reported one and the other two
@@ -214,7 +280,9 @@ def evaluate_all(
     """
     proofs: List[SettlementReconciliationProof] = []
     for obligation_id, legs in _group_by_obligation(txs).items():
-        for detector in (detect_settlement_conflict, detect_reconciliation_drift):
+        for detector in (detect_settlement_conflict,
+                         detect_reconciliation_drift,
+                         detect_cross_rail_double_settlement):
             result = detector(auth, legs)
             if result is not None:
                 proofs.append(result)

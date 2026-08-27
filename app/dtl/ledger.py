@@ -78,6 +78,15 @@ class DTLLedger:
         FULL amount fits. Partial capping is the cost governor's decision, not
         the ledger's - the ledger's job is to never let aggregate exposure
         exceed the grant.
+
+        NAMING, because it is genuinely confusable: this books into
+        `pending_spend_global`, NOT into `reserved_spend_global`. Despite the
+        name, "reserve" here means "place an in-flight hold on headroom for a
+        transaction being authorised right now". The `reserved` bucket is a
+        different thing entirely - a standing pool carved out for a SUB-DELEGATE
+        by `dtl/delegation_chain.py`, which persists whether or not anything is
+        in flight. Both consume headroom; they answer different questions
+        ("is money moving?" vs "has authority been lent to another agent?").
         """
         with self._lock:
             auth = self.get_authority(authority_id)

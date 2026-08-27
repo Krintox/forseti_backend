@@ -1,6 +1,6 @@
 from typing import Any, Dict, Tuple
 
-from ..models.state import DefensePolicy, DTLGlobalAuthorityState
+from ..models.state import DefensePolicy, DTLGlobalAuthorityState, stricter_policy
 
 
 class BluePolicyAdapter:
@@ -44,6 +44,8 @@ class BluePolicyAdapter:
 
         escalated = cls._ESCALATION.get(min(violation_count, 3))
         if escalated is not None:
+            # Monotonic: see stricter_policy() in models/state.py.
+            escalated = stricter_policy(auth.active_policy, escalated)
             auth.active_policy = escalated
             changes["policy"] = escalated.value
             changes["escalated"] = True
@@ -63,17 +65,17 @@ class BluePolicyAdapter:
 
         changes["escalated"] = False
         if invariant_code == "INV_01_GLOBAL_BUDGET_EXCEEDED":
-            auth.active_policy = DefensePolicy.TIGHTENED_HEADROOM_V2
+            auth.active_policy = stricter_policy(auth.active_policy, DefensePolicy.TIGHTENED_HEADROOM_V2)
             changes["headroom_buffer_pct"] = 0.10
             changes["policy"] = DefensePolicy.TIGHTENED_HEADROOM_V2.value
             action_desc = "Reduced available authority headroom buffer by 10% across all rails."
         elif invariant_code == "INV_02_SEMANTIC_INTENT_DRIFT":
-            auth.active_policy = DefensePolicy.STRICT_CATALOG_ATTESTATION
+            auth.active_policy = stricter_policy(auth.active_policy, DefensePolicy.STRICT_CATALOG_ATTESTATION)
             changes["require_sku_attestation"] = True
             changes["policy"] = DefensePolicy.STRICT_CATALOG_ATTESTATION.value
             action_desc = "Enacted strict item-level catalog attestation; shadow-quarantined liquid stored value."
         else:
-            auth.active_policy = DefensePolicy.STEP_UP_VERIFICATION
+            auth.active_policy = stricter_policy(auth.active_policy, DefensePolicy.STEP_UP_VERIFICATION)
             changes["require_step_up"] = True
             changes["policy"] = DefensePolicy.STEP_UP_VERIFICATION.value
             action_desc = "Enforced secondary biometric step-up requirement."

@@ -540,6 +540,27 @@ class ArenaBattleOrchestrator:
         request = getattr(vector_cls, "DELEGATION_REQUEST", None)
         if request:
             try:
+                # Size the pool against AVAILABLE parent authority, not a fixed
+                # figure. SCOPE_CREEP is a free strategy - it runs on whatever
+                # grant the operator has set, and by the 5th round of a campaign
+                # there may be less headroom than the vector's nominal pool. A
+                # fixed Rs 3,000 request was then correctly refused, no link
+                # existed, and `evaluate_action` allowed everything because an
+                # agent with no link acts under the root authority. The vector
+                # silently stopped testing its own mechanism.
+                #
+                # Clamping keeps the demonstration honest at any headroom: the
+                # pool is real, carved from real authority, just smaller.
+                request = dict(request)
+                available = max(0.0, auth.authority_headroom)
+                request["reserved_pool"] = round(
+                    min(float(request.get("reserved_pool", 0.0)), available * 0.5), 2
+                )
+                if request["reserved_pool"] <= 0:
+                    raise ChainViolation(
+                        "no headroom remains to carve a sub-delegation pool from - "
+                        "the parent cannot lend authority it does not hold"
+                    )
                 link = self.chain.issue(auth, **request)
                 await self._emit(event_callback, ev(
                     event_type=EventType.AUTHORITY_GRANTED, actor=Actor.DTL,
@@ -961,6 +982,11 @@ class ArenaBattleOrchestrator:
                     "threshold": 0.5,
                     "backend": self.detector.backend_name,
                     "status": "SCORED" if model_loaded else "MODEL NOT TRAINED - run `python -m app.detector.train`",
+                    # Why the score is what it is. A near-1.0 reading above the
+                    # ceiling is the model agreeing with arithmetic INV_01 has
+                    # already done, not independent evidence - and that is
+                    # exactly the number someone screenshots.
+                    "confidence_provenance": (explanation or {}).get("confidence_provenance"),
                     "tx_id": tx.tx_id,
                 },
             ), pause=0.45)
@@ -1200,7 +1226,31 @@ class ArenaBattleOrchestrator:
         settlement_detected = bool(settlement_proofs)
         # A chain refusal is a genuine containment: the sub-agent was stopped
         # acting outside the authority it actually holds.
-        detected = last_proof is not None or settlement_detected or bool(chain_violations)
+        authority_detected = (
+            last_proof is not None or settlement_detected or bool(chain_violations)
+        )
+
+        # The Deception Lab counts as DETECTION but not as CONTAINMENT, and
+        # conflating the two in either direction misreports the round.
+        #
+        # It was previously excluded from `detected` altogether. The effect was
+        # that PROMPT_INJECTION and CONTEXT_MEMORY_POISONING - both of which the
+        # lab catches every time - came back `detected: false`, `winner: NONE`,
+        # captioned "NO VIOLATION - SPEND STAYED INSIDE THE GRANT". Blue caught
+        # the attack and the arena reported a non-event, the feedback engine
+        # recorded a miss, and kill-chain coverage counted it as unreached.
+        #
+        # It must not simply be folded into `detected` either, because that
+        # would make the outcome CONTAINED - and nothing was contained. The
+        # transaction proceeded, correctly, because it breached no dimension of
+        # the grant. That is the Deception Lab's whole stated position: it is
+        # observability, and no authorization path reads the fields it watches.
+        #
+        # So it gets its own ending.
+        deception_detected = any(
+            (v.get("detections") or []) for v in deception_verdicts
+        )
+        detected = authority_detected or deception_detected
         blue_outcome = self.feedback_engine.record_round_outcome(
             round_id=round_number,
             strategy=strategy,
@@ -1213,7 +1263,11 @@ class ArenaBattleOrchestrator:
                 else settlement_proofs[0].conflict_code if settlement_proofs
                 else None
             ),
-            defense_action="CONTAINED" if detected else "ALLOW",
+            defense_action=(
+                "CONTAINED" if authority_detected
+                else "FLAGGED_NOT_CONTAINED" if deception_detected
+                else "ALLOW"
+            ),
             red_reasoning=f"Executed {strategy}",
             auth_state=auth,
         )
@@ -1254,9 +1308,18 @@ class ArenaBattleOrchestrator:
         # dimension has NOT beaten the defence - it acted inside its authority,
         # which is the system working. Only an unchecked breach is a red win.
         breached = auth.total_exposure_global > auth.global_budget_ceiling
-        if detected:
+        if authority_detected:
             winner, outcome = "BLUE", "CONTAINED"
             label, severity = "ATTACK CONTAINED", "success"
+        elif deception_detected:
+            # Detected, and deliberately NOT contained. Saying so precisely is a
+            # stronger claim than "contained" would be: the deceptive input was
+            # flagged, AND it could not have changed the outcome even unflagged,
+            # because no invariant, firewall check or governor decision reads
+            # the fields it targets.
+            winner, outcome = "BLUE", "DECEPTION_FLAGGED_AUTHORITY_INTACT"
+            label = "DECEPTION FLAGGED - AUTHORITY NEVER AT RISK"
+            severity = "warning"
         elif not dtl_enabled:
             winner, outcome = "RED", "UNCHECKED_BREACH"
             label, severity = "ATTACK SUCCEEDED - NO GLOBAL CHECK", "critical"

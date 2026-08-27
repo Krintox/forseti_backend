@@ -11,10 +11,49 @@ from __future__ import annotations
 
 import os
 
-# backend/app/paths.py -> backend/app -> backend -> <repo root>
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))          # .../app
+_BACKEND_DIR = os.path.abspath(os.path.join(_APP_DIR, ".."))    # .../backend
+_PARENT_DIR = os.path.abspath(os.path.join(_BACKEND_DIR, "..")) # monorepo root, when nested
 
-ARTIFACTS_DIR = os.environ.get("ARTIFACTS_DIR", os.path.join(REPO_ROOT, "artifacts"))
+
+def _resolve_artifacts_dir() -> str:
+    """
+    Find the artifact tree in BOTH layouts this code runs in.
+
+    Locally the backend lives inside the monorepo, so artifacts sit one level
+    above it (`Forseti/artifacts/`). Deployed, the backend repository IS the
+    deployment root, so `..` from it points outside the checkout entirely and
+    `<parent>/artifacts` does not exist - the API then silently fell back to
+    whatever it could find, or to nothing.
+
+    Preference order, most specific first:
+
+      1. $ARTIFACTS_DIR              - an explicit deployment override wins
+      2. <backend>/artifacts         - the copy that actually ships
+      3. <monorepo root>/artifacts   - where the pipeline writes locally
+
+    A directory only counts if it holds `evaluation/`, so an empty stub left by
+    `ensure_dirs()` cannot shadow a real tree.
+    """
+    override = os.environ.get("ARTIFACTS_DIR")
+    if override:
+        return os.path.abspath(override)
+
+    candidates = [
+        os.path.join(_BACKEND_DIR, "artifacts"),
+        os.path.join(_PARENT_DIR, "artifacts"),
+    ]
+    for candidate in candidates:
+        if os.path.isdir(os.path.join(candidate, "evaluation")):
+            return candidate
+    return candidates[0]
+
+
+ARTIFACTS_DIR = _resolve_artifacts_dir()
+
+# Everything else still hangs off the monorepo root when it exists, falling back
+# to the backend directory when the backend is deployed on its own.
+REPO_ROOT = _PARENT_DIR if os.path.isdir(os.path.join(_PARENT_DIR, "docs")) else _BACKEND_DIR
 MODELS_DIR = os.path.join(ARTIFACTS_DIR, "models")
 EVALUATION_DIR = os.path.join(ARTIFACTS_DIR, "evaluation")
 FIDELITY_DIR = os.path.join(ARTIFACTS_DIR, "fidelity")

@@ -4,6 +4,7 @@ from .base import BaseRailAdapter
 from ...models.transactions import CartItem, SyntheticTransaction
 from ...models.state import TransactionState, PaymentRailType
 from datetime import datetime
+from ..client_signing import verify as verify_client_signature
 
 
 class AgenticAp2Adapter(BaseRailAdapter):
@@ -96,8 +97,14 @@ class AgenticAp2Adapter(BaseRailAdapter):
         # 3. Signature presence. As with the card rail, this is a field check
         #    and is not described as cryptographic verification, because no key
         #    or signature exists here to verify.
-        if not tx.client_signature or "invalid" in tx.client_signature:
-            return False, "LOCAL_AP2_REJECT: missing or malformed intent-mandate signature field"
+        # A REAL check: recompute the HMAC over the canonical economic
+        # content of this transaction. Previously this was `"invalid" in
+        # tx.client_signature` - a substring test on a field the
+        # transaction set about itself, which no in-flight tampering
+        # could break. See simulator/client_signing.py.
+        signature_ok, signature_problem = verify_client_signature(tx)
+        if not signature_ok:
+            return False, f"LOCAL_AP2_REJECT: {signature_problem}"
 
         # Success locally
         self.local_spent += tx.amount

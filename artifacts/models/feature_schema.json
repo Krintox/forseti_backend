@@ -1,6 +1,6 @@
 {
-  "version": "2.1.0",
-  "feature_count": 29,
+  "version": "2.3.0",
+  "feature_count": 37,
   "feature_names": [
     "amount",
     "rail_code",
@@ -30,7 +30,15 @@
     "revocation_rate_1h",
     "regrant_frequency",
     "velocity_spike_indicator",
-    "mcc_entropy"
+    "mcc_entropy",
+    "graph_agent_out_degree",
+    "graph_merchant_in_degree",
+    "graph_agent_pagerank",
+    "graph_merchant_pagerank",
+    "graph_agent_betweenness",
+    "graph_community_size_ratio",
+    "graph_device_shared_count",
+    "graph_cross_rail_fanout_velocity"
   ],
   "feature_groups": {
     "raw_transaction": [
@@ -71,7 +79,17 @@
       "regrant_frequency",
       "velocity_spike_indicator",
       "mcc_entropy"
+    ],
+    "graph": [
+      "graph_agent_out_degree",
+      "graph_merchant_in_degree",
+      "graph_agent_pagerank",
+      "graph_merchant_pagerank",
+      "graph_agent_betweenness",
+      "graph_community_size_ratio",
+      "graph_device_shared_count",
+      "graph_cross_rail_fanout_velocity"
     ]
   },
-  "description": "Unified 5-Group Feature Schema for FORSETI Hybrid ML Detector."
+  "description": "Unified 6-Group Feature Schema for FORSETI Hybrid ML Detector."
 }

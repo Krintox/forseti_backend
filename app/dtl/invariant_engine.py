@@ -371,6 +371,18 @@ class DTLInvariantEngine:
         INV_03 - MERCHANT. Previously documented but never enforced at runtime;
         the offline probe in detector/baselines.py already scored it, so the
         engine and the measurement now agree.
+
+        SCOPE OF THE CLAIM. Merchant-category restriction is NOT novel per-rail:
+        it is a real, shipped control set at token provisioning, and the card
+        adapter in this repository enforces it twenty lines into its own file.
+        FORSETI must not present MCC scope as something "only the delegation
+        knows". What the rails cannot do is what this invariant adds: UPI Circle
+        and the agentic rail have no MCC concept at all, so a category bound the
+        USER expressed is unenforceable on them; and a token's allow-list is
+        fixed at provisioning, so narrowing the delegation afterwards re-scopes
+        nothing already issued. See the note in
+        simulator/adapters/card_adapter.py, which states the same boundary from
+        the rail's side.
         """
         if not auth.permitted_mccs or tx.merchant_mcc in auth.permitted_mccs:
             return None

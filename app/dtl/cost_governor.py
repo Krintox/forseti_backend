@@ -103,6 +103,9 @@ class AdversarialCostGovernor:
                 f"consumed."
             )
             auth.active_policy = DefensePolicy.STRICT_INVARIANT
+            tx.containment_code = "RAIL_SCOPE_BLOCK"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         # ------------------------------------------ PER-TX cap: escalate, not block
@@ -116,6 +119,9 @@ class AdversarialCostGovernor:
                 f"up to ₹{cap:,.2f} without interruption."
             )
             auth.active_policy = DefensePolicy.STEP_UP_VERIFICATION
+            tx.containment_code = "STEP_UP_REQUIRED"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         # ------------------------------------------------- TIME: re-consent
@@ -127,6 +133,9 @@ class AdversarialCostGovernor:
                 f"untouched."
             )
             auth.active_policy = DefensePolicy.STEP_UP_VERIFICATION
+            tx.containment_code = "RE_CONSENT_HOLD"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         # ------------------------------------------ MERCHANT scope violation
@@ -138,6 +147,9 @@ class AdversarialCostGovernor:
                 f"merchants continue to clear normally."
             )
             auth.active_policy = DefensePolicy.STRICT_CATALOG_ATTESTATION
+            tx.containment_code = "SCOPE_QUARANTINE"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         # ---------------------------------------------- BENEFICIARY violation
@@ -155,6 +167,9 @@ class AdversarialCostGovernor:
                 f"no headroom was consumed."
             )
             auth.active_policy = DefensePolicy.STRICT_INVARIANT
+            tx.containment_code = "BENEFICIARY_SCOPE_BLOCK"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         # --------------------------------- PURPOSE drift: split the basket
@@ -204,6 +219,9 @@ class AdversarialCostGovernor:
                 # that falsified ceiling into the tamper-evident audit trail.
                 # Headroom coincidentally matched, which is why it went unseen.
                 auth.cumulative_spent_authorized += bookable
+                tx.containment_code = "PARTIAL_AUTH"
+                tx.authorized_amount = round(bookable, 2)
+                tx.quarantined_amount = round(float(tx.amount) - bookable, 2)
                 return tx, tx.containment_action
 
             # Whole basket is stored value: nothing legitimate to clear.
@@ -213,6 +231,9 @@ class AdversarialCostGovernor:
                 f"delegated purpose; nothing was booked and the grant is untouched."
             )
             auth.active_policy = DefensePolicy.STRICT_CATALOG_ATTESTATION
+            tx.containment_code = "FULL_QUARANTINE"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         # ------------------------------------- AMOUNT: cap at real headroom
@@ -225,12 +246,18 @@ class AdversarialCostGovernor:
                     f"excess Rs {tx.amount - available_headroom:,.2f} held in pending verification."
                 )
                 auth.cumulative_spent_authorized += available_headroom
+                tx.containment_code = "HEADROOM_CAP"
+                tx.authorized_amount = round(available_headroom, 2)
+                tx.quarantined_amount = round(float(tx.amount) - available_headroom, 2)
                 return tx, tx.containment_action
             tx.state = TransactionState.QUARANTINED
             tx.containment_action = (
                 "CAPABILITY_CONTAINED: authority ceiling reached. Agent spend quarantined "
                 "without user lockout."
             )
+            tx.containment_code = "CAPABILITY_CONTAINED"
+            tx.authorized_amount = 0.0
+            tx.quarantined_amount = round(float(tx.amount), 2)
             return tx, tx.containment_action
 
         tx.state = TransactionState.QUARANTINED
@@ -238,4 +265,7 @@ class AdversarialCostGovernor:
             "SHADOW_QUARANTINE: transaction routed to the decoy sandbox. The principal's "
             "instruments and remaining grant are unaffected."
         )
+        tx.containment_code = "SHADOW_QUARANTINE"
+        tx.authorized_amount = 0.0
+        tx.quarantined_amount = round(float(tx.amount), 2)
         return tx, tx.containment_action

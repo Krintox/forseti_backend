@@ -30,6 +30,40 @@ def _jitter(base: float, spread: float = 0.22) -> float:
     return round(base * _RNG.uniform(1.0 - spread, 1.0 + spread), 2)
 
 
+
+# Merchants whose MCC is INSIDE the default household grant (5411 groceries,
+# 5499 misc food, 4900 utilities).
+#
+# Why this exists: several vectors previously drew from hand-written lists that
+# happened to include out-of-scope MCCs - 5812 restaurants in the conditioning
+# legs, 5045 electronics in the velocity probes, 5311/5734 in the revocation
+# churn. The DTL then raised INV_03_UNAUTHORIZED_MCC and the vector was
+# "caught", but for MERCHANT scope rather than for the mechanism it exists to
+# demonstrate. Worse, BaselinePoisonVector's own docstring claimed its
+# conditioning legs were unremarkable and reported WITHIN_AUTHORITY, which was
+# simply untrue of two of them.
+#
+# A vector should be caught by the dimension it is testing. Where a vector wants
+# a MERCHANT breach it should reach for OUT_OF_SCOPE_MERCHANTS deliberately.
+IN_SCOPE_MERCHANTS = [
+    ("merch_corner_kirana", "Corner Kirana Store", "5411"),
+    ("merch_daily_grocer", "Daily Grocer Co-op", "5411"),
+    ("merch_city_supermart", "City Supermart", "5411"),
+    ("merch_greenleaf_organics", "Greenleaf Organics", "5411"),
+    ("merch_quickmart_misc", "QuickMart Miscellaneous", "5499"),
+    ("merch_micro_pos", "Automated Micro POS", "5499"),
+    ("merch_metro_utilities", "Metro Utilities Board", "4900"),
+]
+
+#: For vectors whose POINT is a merchant-scope breach.
+OUT_OF_SCOPE_MERCHANTS = [
+    ("merch_bistro_lane", "Bistro Lane", "5812"),
+    ("merch_gadget_world", "Gadget World", "5045"),
+    ("merch_metro_dept", "Metro Department Store", "5311"),
+    ("merch_software_mart", "Software Mart", "5734"),
+]
+
+
 class BaselinePoisonVector:
     """
     Vector 3: Adaptive Baseline Poisoning.
@@ -58,13 +92,10 @@ class BaselinePoisonVector:
 
     @staticmethod
     def generate_attack(authority_id: str = "auth_household_grocery_2026") -> List[SyntheticTransaction]:
-        merchants = [
-            ("merch_corner_kirana", "Corner Kirana Store", "5411"),
-            ("merch_daily_grocer", "Daily Grocer Co-op", "5411"),
-            ("merch_bistro_lane", "Bistro Lane", "5812"),
-            ("merch_city_supermart", "City Supermart", "5411"),
-            ("merch_greenleaf_organics", "Greenleaf Organics", "5411"),
-        ]
+        # In-scope by construction: the conditioning legs must really be
+        # unremarkable, or the docstring below is false. Two of the five
+        # merchants here used to be MCC 5812, which the grant does not permit.
+        merchants = IN_SCOPE_MERCHANTS
         rails = [PaymentRailType.UPI_CIRCLE, PaymentRailType.CARD_TOKEN]
         txs: List[SyntheticTransaction] = []
 
@@ -144,9 +175,13 @@ class RevocationFloodVector:
     @staticmethod
     def generate_attack(authority_id: str = "auth_household_grocery_2026") -> List[SyntheticTransaction]:
         legs = [
-            (PaymentRailType.AGENTIC_AP2, 4100.0, "merch_software_mart", "Software Mart", "5734"),
+            # All in scope. The mechanism under test is the REVOKE/REGRANT
+            # churn and the aggregate that survives it - not merchant category.
+            # Two of these legs were 5734/5311, so INV_03 fired first and the
+            # lifecycle story never got to make its point.
+            (PaymentRailType.AGENTIC_AP2, 4100.0, "merch_quickmart_misc", "QuickMart Miscellaneous", "5499"),
             (PaymentRailType.UPI_CIRCLE, 3400.0, "merch_valuemart_plus", "ValueMart Plus", "5411"),
-            (PaymentRailType.CARD_TOKEN, 4700.0, "merch_hyper_saver", "HyperSaver Wholesale", "5311"),
+            (PaymentRailType.CARD_TOKEN, 4700.0, "merch_metro_utilities", "Metro Utilities Board", "4900"),
         ]
         return [
             SyntheticTransaction(
@@ -189,12 +224,10 @@ class VelocitySpikeVector:
 
     @staticmethod
     def generate_attack(authority_id: str = "auth_household_grocery_2026") -> List[SyntheticTransaction]:
-        merchants = [
-            ("merch_micro_pos", "Automated Micro POS", "5499"),
-            ("merch_quickmart_misc", "QuickMart Miscellaneous", "5499"),
-            ("merch_gadget_world", "Gadget World", "5045"),
-            ("merch_corner_kirana", "Corner Kirana Store", "5411"),
-        ]
+        # In scope, so this vector is judged on VELOCITY rather than caught
+        # incidentally on merchant category (Gadget World, MCC 5045, used to sit
+        # in this list and did exactly that).
+        merchants = IN_SCOPE_MERCHANTS
         rails = [PaymentRailType.CARD_TOKEN, PaymentRailType.CARD_TOKEN,
                  PaymentRailType.UPI_CIRCLE, PaymentRailType.AGENTIC_AP2]
         out: List[SyntheticTransaction] = []
@@ -263,16 +296,23 @@ class ScopeCreepVector:
                                 category="GROCERY", unit_price=900.0, quantity=1)],
                 is_anomalous_red_attack=False,
             ),
-            # Leg 2: outside the sub-delegation's MERCHANT scope. The parent
-            # grant permits 5311; this sub-agent's link does not.
+            # Leg 2: outside the SUB-DELEGATION's merchant scope, and inside
+            # the parent's.
+            #
+            # This used to use MCC 5311 with a comment claiming "the parent
+            # grant permits 5311". It does not - the household grant is
+            # 5411/5499/4900 - so INV_03 fired at the parent level too and the
+            # demonstration proved nothing about sub-delegation. 5499 is
+            # genuinely permitted to the parent and genuinely denied to this
+            # link, so the ONLY thing that refuses this leg is the chain.
             SyntheticTransaction(
                 tx_id=f"tx_sub_creep_{_RNG.randrange(10**6):06d}",
                 authority_id=authority_id, agent_id=sub,
                 rail=PaymentRailType.CARD_TOKEN, amount=_jitter(1300.0, 0.12),
-                merchant_id="merch_metro_dept", merchant_name="Metro Department Store",
-                merchant_mcc="5311",
-                items=[CartItem(sku="SKU_TECH_01", name="Smart Fitness Tracker",
-                                category="ELECTRONICS", unit_price=1300.0, quantity=1)],
+                merchant_id="merch_quickmart_misc", merchant_name="QuickMart Miscellaneous",
+                merchant_mcc="5499",
+                items=[CartItem(sku="SKU_MISC_01", name="Household Sundries",
+                                category="GROCERY", unit_price=1300.0, quantity=1)],
                 is_anomalous_red_attack=True,
             ),
             # Leg 3: inside merchant scope, but over the link's per-tx cap.

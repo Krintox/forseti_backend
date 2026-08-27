@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "experiment_id": "BASELINE-SUITE-20260818-143541",
-    "timestamp": "2026-08-18T14:35:41.426288+00:00",
+    "experiment_id": "BASELINE-SUITE-20260825-202854",
+    "timestamp": "2026-08-25T20:28:54.161096+00:00",
     "seed": 42,
     "model_backend": {
       "backend": "xgboost",
@@ -16,8 +16,8 @@
   },
   "condition_attack_family_holdout": {
     "metadata": {
-      "experiment_id": "BASELINE-20260818-143537",
-      "timestamp": "2026-08-18T14:35:37.058586+00:00",
+      "experiment_id": "BASELINE-20260825-202810",
+      "timestamp": "2026-08-25T20:28:10.357515+00:00",
       "seed": 42,
       "model_backend": {
         "backend": "xgboost",
@@ -30,8 +30,8 @@
         "REVOCATION_FLOOD"
       ],
       "sample_counts": {
-        "train": 16356,
-        "test": 3600
+        "train": 13611,
+        "test": 3000
       },
       "shared_test_slice": true,
       "dtl_feature_names": [
@@ -51,290 +51,290 @@
     },
     "baselines": {
       "rules_only": {
-        "pr_auc": 0.281,
-        "roc_auc": 0.8222,
-        "precision": 0.4265,
-        "recall": 0.7531,
-        "f1_score": 0.5446,
+        "pr_auc": 0.1262,
+        "roc_auc": 0.6618,
+        "precision": 0.1899,
+        "recall": 0.4653,
+        "f1_score": 0.2697,
         "recall_at_0.5pct_fpr": 0.0,
-        "precision_at_100": 0.21,
-        "false_positive_rate": 0.072,
+        "precision_at_100": 0.19,
+        "false_positive_rate": 0.14332,
         "confusion_matrix": {
-          "tn": 3119,
-          "fp": 242,
-          "fn": 59,
-          "tp": 180
+          "tn": 2397,
+          "fp": 401,
+          "fn": 108,
+          "tp": 94
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 459169.94,
-          "legitimate_value_blocked_inr": 1408514.17,
-          "fraud_value_missed_inr": 45142.9,
-          "net_value_saved_inr": -949344.23
+          "fraud_value_caught_inr": 369975.92,
+          "legitimate_value_blocked_inr": 1272818.32,
+          "fraud_value_missed_inr": 54430.94,
+          "net_value_saved_inr": -902842.4
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Rules-only (static per-rail limits)",
         "feature_count": 0,
         "latency": {
-          "p50_ms": 0.003,
-          "p95_ms": 0.0033,
-          "p99_ms": 0.0041,
-          "mean_ms": 0.0031,
-          "n_measured": 3600
+          "p50_ms": 0.023,
+          "p95_ms": 0.0534,
+          "p99_ms": 0.2629,
+          "mean_ms": 0.036,
+          "n_measured": 3000
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.2568,
-            "mean_score": 0.2554
+            "n": 64,
+            "recall": 0.3906,
+            "mean_score": 0.3531
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
-            "recall": 0.75,
-            "mean_score": 0.65
+            "n": 14,
+            "recall": 0.7857,
+            "mean_score": 0.6786
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.8219
+            "n": 13,
+            "recall": 0.6923,
+            "mean_score": 0.5923
           },
           "SCOPE_CREEP": {
-            "n": 33,
+            "n": 27,
             "recall": 1.0,
-            "mean_score": 0.8303
+            "mean_score": 0.8333
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.8
+            "n": 84,
+            "recall": 0.2619,
+            "mean_score": 0.2464
           }
         }
       },
       "per_rail_ml": {
-        "pr_auc": 0.7564,
-        "roc_auc": 0.884,
-        "precision": 0.9816,
-        "recall": 0.6695,
-        "f1_score": 0.796,
-        "recall_at_0.5pct_fpr": 0.6904,
-        "precision_at_100": 1.0,
-        "false_positive_rate": 0.00089,
+        "pr_auc": 0.6534,
+        "roc_auc": 0.9399,
+        "precision": 0.736,
+        "recall": 0.4554,
+        "f1_score": 0.5627,
+        "recall_at_0.5pct_fpr": 0.3762,
+        "precision_at_100": 0.8,
+        "false_positive_rate": 0.01179,
         "confusion_matrix": {
-          "tn": 3358,
-          "fp": 3,
-          "fn": 79,
-          "tp": 160
+          "tn": 2765,
+          "fp": 33,
+          "fn": 110,
+          "tp": 92
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 343630.81,
-          "legitimate_value_blocked_inr": 3991.96,
-          "fraud_value_missed_inr": 160682.03,
-          "net_value_saved_inr": 339638.85
+          "fraud_value_caught_inr": 242357.25,
+          "legitimate_value_blocked_inr": 32287.39,
+          "fraud_value_missed_inr": 182049.61,
+          "net_value_saved_inr": 210069.86
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Per-rail ML (siloed, one model per rail)",
-        "feature_count": 16,
+        "feature_count": 24,
         "rails": {
           "CARD": {
             "status": "TRAINED",
-            "train_rows": 5825,
-            "test_rows": 1221
+            "train_rows": 4673,
+            "test_rows": 1004
           },
           "UPI": {
             "status": "TRAINED",
-            "train_rows": 5221,
-            "test_rows": 1181
+            "train_rows": 4485,
+            "test_rows": 1003
           },
           "AGENTIC": {
             "status": "TRAINED",
-            "train_rows": 5310,
-            "test_rows": 1198
+            "train_rows": 4453,
+            "test_rows": 993
           }
         },
         "latency": {
-          "p50_ms": 0.2073,
-          "p95_ms": 0.627,
-          "p99_ms": 0.7473,
-          "mean_ms": 0.2808,
+          "p50_ms": 1.3066,
+          "p95_ms": 1.8431,
+          "p99_ms": 2.1802,
+          "mean_ms": 1.3537,
           "n_measured": 300
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.0,
-            "mean_score": 0.0003
+            "n": 64,
+            "recall": 0.1719,
+            "mean_score": 0.1877
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.9969
+            "n": 14,
+            "recall": 0.7143,
+            "mean_score": 0.7088
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
-            "recall": 0.6875,
-            "mean_score": 0.707
+            "n": 13,
+            "recall": 0.2308,
+            "mean_score": 0.2289
           },
           "SCOPE_CREEP": {
-            "n": 33,
-            "recall": 1.0,
-            "mean_score": 0.9998
+            "n": 27,
+            "recall": 0.8889,
+            "mean_score": 0.8503
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.9997
+            "n": 84,
+            "recall": 0.5238,
+            "mean_score": 0.5187
           }
         }
       },
       "ml_without_dtl": {
-        "pr_auc": 0.7548,
-        "roc_auc": 0.883,
-        "precision": 1.0,
-        "recall": 0.6904,
-        "f1_score": 0.8168,
-        "recall_at_0.5pct_fpr": 0.6904,
-        "precision_at_100": 1.0,
-        "false_positive_rate": 0.0,
+        "pr_auc": 0.658,
+        "roc_auc": 0.942,
+        "precision": 0.7611,
+        "recall": 0.4257,
+        "f1_score": 0.546,
+        "recall_at_0.5pct_fpr": 0.3614,
+        "precision_at_100": 0.8,
+        "false_positive_rate": 0.00965,
         "confusion_matrix": {
-          "tn": 3361,
-          "fp": 0,
-          "fn": 74,
-          "tp": 165
+          "tn": 2771,
+          "fp": 27,
+          "fn": 116,
+          "tp": 86
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 349956.57,
-          "legitimate_value_blocked_inr": 0.0,
-          "fraud_value_missed_inr": 154356.27,
-          "net_value_saved_inr": 349956.57
+          "fraud_value_caught_inr": 265740.1,
+          "legitimate_value_blocked_inr": 26597.72,
+          "fraud_value_missed_inr": 158666.76,
+          "net_value_saved_inr": 239142.38
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Global ML without DTL features",
-        "feature_count": 17,
+        "feature_count": 25,
         "latency": {
-          "p50_ms": 0.2032,
-          "p95_ms": 0.2999,
-          "p99_ms": 0.3946,
-          "mean_ms": 0.2171,
+          "p50_ms": 1.5328,
+          "p95_ms": 2.1539,
+          "p99_ms": 2.5813,
+          "mean_ms": 1.5644,
           "n_measured": 300
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.0,
-            "mean_score": 0.0001
+            "n": 64,
+            "recall": 0.1719,
+            "mean_score": 0.2009
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.9992
+            "n": 14,
+            "recall": 0.9286,
+            "mean_score": 0.8813
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 13,
+            "recall": 0.1538,
+            "mean_score": 0.1925
           },
           "SCOPE_CREEP": {
-            "n": 33,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 27,
+            "recall": 0.9259,
+            "mean_score": 0.9095
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 84,
+            "recall": 0.4167,
+            "mean_score": 0.4468
           }
         }
       },
       "hybrid_dtl_ml": {
-        "pr_auc": 0.8926,
-        "roc_auc": 0.9815,
-        "precision": 1.0,
-        "recall": 0.6904,
-        "f1_score": 0.8168,
-        "recall_at_0.5pct_fpr": 0.6904,
+        "pr_auc": 0.94,
+        "roc_auc": 0.9828,
+        "precision": 0.9774,
+        "recall": 0.8564,
+        "f1_score": 0.9129,
+        "recall_at_0.5pct_fpr": 0.8812,
         "precision_at_100": 1.0,
-        "false_positive_rate": 0.0,
+        "false_positive_rate": 0.00143,
         "confusion_matrix": {
-          "tn": 3361,
-          "fp": 0,
-          "fn": 74,
-          "tp": 165
+          "tn": 2794,
+          "fp": 4,
+          "fn": 29,
+          "tp": 173
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 349956.57,
-          "legitimate_value_blocked_inr": 0.0,
-          "fraud_value_missed_inr": 154356.27,
-          "net_value_saved_inr": 349956.57
+          "fraud_value_caught_inr": 356760.46,
+          "legitimate_value_blocked_inr": 7267.87,
+          "fraud_value_missed_inr": 67646.4,
+          "net_value_saved_inr": 349492.59
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "FORSETI hybrid (DTL features + GBDT)",
-        "feature_count": 29,
+        "feature_count": 37,
         "latency": {
-          "p50_ms": 0.2129,
-          "p95_ms": 0.4795,
-          "p99_ms": 0.5559,
-          "mean_ms": 0.2541,
+          "p50_ms": 1.23,
+          "p95_ms": 1.8199,
+          "p99_ms": 2.1031,
+          "mean_ms": 1.2957,
           "n_measured": 300
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.0,
-            "mean_score": 0.0008
+            "n": 64,
+            "recall": 0.8281,
+            "mean_score": 0.8309
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
+            "n": 14,
             "recall": 1.0,
-            "mean_score": 0.9999
+            "mean_score": 0.9997
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 13,
+            "recall": 0.7692,
+            "mean_score": 0.7753
           },
           "SCOPE_CREEP": {
-            "n": 33,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 27,
+            "recall": 0.8519,
+            "mean_score": 0.8583
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 84,
+            "recall": 0.869,
+            "mean_score": 0.8676
           }
         }
       },
       "dtl_invariant_only": {
-        "pr_auc": 0.4221,
-        "roc_auc": 0.9401,
-        "precision": 0.4328,
-        "recall": 0.9707,
-        "f1_score": 0.5987,
+        "pr_auc": 0.253,
+        "roc_auc": 0.8519,
+        "precision": 0.2829,
+        "recall": 0.8614,
+        "f1_score": 0.4259,
         "recall_at_0.5pct_fpr": 0.0,
-        "precision_at_100": 0.5,
-        "false_positive_rate": 0.09045,
+        "precision_at_100": 0.23,
+        "false_positive_rate": 0.15761,
         "confusion_matrix": {
-          "tn": 3057,
-          "fp": 304,
-          "fn": 7,
-          "tp": 232
+          "tn": 2357,
+          "fp": 441,
+          "fn": 28,
+          "tp": 174
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 483174.34,
-          "legitimate_value_blocked_inr": 369475.93,
-          "fraud_value_missed_inr": 21138.5,
-          "net_value_saved_inr": 113698.41
+          "fraud_value_caught_inr": 397635.4,
+          "legitimate_value_blocked_inr": 446479.93,
+          "fraud_value_missed_inr": 26771.46,
+          "net_value_saved_inr": -48844.53
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Deterministic DTL invariant engine (no ML)",
         "feature_count": 3,
         "is_deterministic": true,
@@ -344,61 +344,61 @@
           "INV_03_UNAUTHORIZED_MCC"
         ],
         "latency": {
-          "p50_ms": 0.0003,
-          "p95_ms": 0.0004,
-          "p99_ms": 0.0005,
-          "mean_ms": 0.0003,
-          "n_measured": 3600
+          "p50_ms": 0.0012,
+          "p95_ms": 0.0016,
+          "p99_ms": 0.0018,
+          "mean_ms": 0.0014,
+          "n_measured": 3000
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.9054,
-            "mean_score": 0.9054
+            "n": 64,
+            "recall": 0.8438,
+            "mean_score": 0.8438
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
+            "n": 14,
             "recall": 1.0,
             "mean_score": 1.0
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
+            "n": 13,
             "recall": 1.0,
             "mean_score": 1.0
           },
           "SCOPE_CREEP": {
-            "n": 33,
+            "n": 27,
             "recall": 1.0,
             "mean_score": 1.0
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 1.0
+            "n": 84,
+            "recall": 0.7857,
+            "mean_score": 0.7857
           }
         }
       }
     },
     "measured_dtl_lift": {
       "definition": "PR-AUC(hybrid with DTL features) - PR-AUC(same model without DTL features), same test slice",
-      "pr_auc_hybrid_dtl": 0.8926,
-      "pr_auc_without_dtl": 0.7548,
-      "pr_auc_lift": 0.1378,
-      "pr_auc_lift_vs_per_rail_silo": 0.1362,
+      "pr_auc_hybrid_dtl": 0.94,
+      "pr_auc_without_dtl": 0.658,
+      "pr_auc_lift": 0.282,
+      "pr_auc_lift_vs_per_rail_silo": 0.2866,
       "cross_rail_split_recall": {
-        "rules_only": 0.2568,
-        "per_rail_ml": 0.0,
-        "ml_without_dtl": 0.0,
-        "hybrid_dtl_ml": 0.0,
-        "dtl_invariant_only": 0.9054,
+        "rules_only": 0.3906,
+        "per_rail_ml": 0.1719,
+        "ml_without_dtl": 0.1719,
+        "hybrid_dtl_ml": 0.8281,
+        "dtl_invariant_only": 0.8438,
         "note": "Every learned model scores each transaction in isolation, so a cross-rail leg looks ordinary to it. The deterministic DTL invariant compares AGGREGATE exposure against the delegated ceiling and is therefore holdout-independent: it does not need to have seen the attack family before."
       }
     }
   },
   "condition_all_families_seen": {
     "metadata": {
-      "experiment_id": "BASELINE-20260818-143539",
-      "timestamp": "2026-08-18T14:35:39.944380+00:00",
+      "experiment_id": "BASELINE-20260825-202845",
+      "timestamp": "2026-08-25T20:28:45.575774+00:00",
       "seed": 42,
       "model_backend": {
         "backend": "xgboost",
@@ -408,8 +408,8 @@
       },
       "attack_families_held_out": [],
       "sample_counts": {
-        "train": 16800,
-        "test": 3600
+        "train": 14000,
+        "test": 3000
       },
       "shared_test_slice": true,
       "dtl_feature_names": [
@@ -429,290 +429,290 @@
     },
     "baselines": {
       "rules_only": {
-        "pr_auc": 0.281,
-        "roc_auc": 0.8222,
-        "precision": 0.4265,
-        "recall": 0.7531,
-        "f1_score": 0.5446,
+        "pr_auc": 0.1262,
+        "roc_auc": 0.6618,
+        "precision": 0.1899,
+        "recall": 0.4653,
+        "f1_score": 0.2697,
         "recall_at_0.5pct_fpr": 0.0,
-        "precision_at_100": 0.21,
-        "false_positive_rate": 0.072,
+        "precision_at_100": 0.19,
+        "false_positive_rate": 0.14332,
         "confusion_matrix": {
-          "tn": 3119,
-          "fp": 242,
-          "fn": 59,
-          "tp": 180
+          "tn": 2397,
+          "fp": 401,
+          "fn": 108,
+          "tp": 94
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 459169.94,
-          "legitimate_value_blocked_inr": 1408514.17,
-          "fraud_value_missed_inr": 45142.9,
-          "net_value_saved_inr": -949344.23
+          "fraud_value_caught_inr": 369975.92,
+          "legitimate_value_blocked_inr": 1272818.32,
+          "fraud_value_missed_inr": 54430.94,
+          "net_value_saved_inr": -902842.4
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Rules-only (static per-rail limits)",
         "feature_count": 0,
         "latency": {
-          "p50_ms": 0.0031,
-          "p95_ms": 0.0037,
-          "p99_ms": 0.0051,
-          "mean_ms": 0.0032,
-          "n_measured": 3600
+          "p50_ms": 0.023,
+          "p95_ms": 0.0508,
+          "p99_ms": 0.185,
+          "mean_ms": 0.0294,
+          "n_measured": 3000
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.2568,
-            "mean_score": 0.2554
+            "n": 64,
+            "recall": 0.3906,
+            "mean_score": 0.3531
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
-            "recall": 0.75,
-            "mean_score": 0.65
+            "n": 14,
+            "recall": 0.7857,
+            "mean_score": 0.6786
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.8219
+            "n": 13,
+            "recall": 0.6923,
+            "mean_score": 0.5923
           },
           "SCOPE_CREEP": {
-            "n": 33,
+            "n": 27,
             "recall": 1.0,
-            "mean_score": 0.8303
+            "mean_score": 0.8333
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.8
+            "n": 84,
+            "recall": 0.2619,
+            "mean_score": 0.2464
           }
         }
       },
       "per_rail_ml": {
-        "pr_auc": 0.915,
-        "roc_auc": 0.9874,
-        "precision": 0.786,
-        "recall": 0.8452,
-        "f1_score": 0.8145,
-        "recall_at_0.5pct_fpr": 0.7782,
-        "precision_at_100": 1.0,
-        "false_positive_rate": 0.01636,
+        "pr_auc": 0.7455,
+        "roc_auc": 0.9576,
+        "precision": 0.6667,
+        "recall": 0.6436,
+        "f1_score": 0.6549,
+        "recall_at_0.5pct_fpr": 0.4356,
+        "precision_at_100": 0.87,
+        "false_positive_rate": 0.02323,
         "confusion_matrix": {
-          "tn": 3306,
-          "fp": 55,
-          "fn": 37,
-          "tp": 202
+          "tn": 2733,
+          "fp": 65,
+          "fn": 72,
+          "tp": 130
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 445723.0,
-          "legitimate_value_blocked_inr": 107036.91,
-          "fraud_value_missed_inr": 58589.84,
-          "net_value_saved_inr": 338686.09
+          "fraud_value_caught_inr": 330012.75,
+          "legitimate_value_blocked_inr": 80393.76,
+          "fraud_value_missed_inr": 94394.11,
+          "net_value_saved_inr": 249618.99
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Per-rail ML (siloed, one model per rail)",
-        "feature_count": 16,
+        "feature_count": 24,
         "rails": {
           "CARD": {
             "status": "TRAINED",
-            "train_rows": 5946,
-            "test_rows": 1221
+            "train_rows": 4784,
+            "test_rows": 1004
           },
           "UPI": {
             "status": "TRAINED",
-            "train_rows": 5337,
-            "test_rows": 1181
+            "train_rows": 4627,
+            "test_rows": 1003
           },
           "AGENTIC": {
             "status": "TRAINED",
-            "train_rows": 5517,
-            "test_rows": 1198
+            "train_rows": 4589,
+            "test_rows": 993
           }
         },
         "latency": {
-          "p50_ms": 0.209,
-          "p95_ms": 0.341,
-          "p99_ms": 0.5231,
-          "mean_ms": 0.2294,
+          "p50_ms": 1.2303,
+          "p95_ms": 1.7607,
+          "p99_ms": 1.8931,
+          "mean_ms": 1.282,
           "n_measured": 300
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
+            "n": 64,
             "recall": 0.5,
-            "mean_score": 0.4931
+            "mean_score": 0.4982
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
-            "recall": 1.0,
-            "mean_score": 0.9754
+            "n": 14,
+            "recall": 0.7143,
+            "mean_score": 0.7118
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
+            "n": 13,
             "recall": 1.0,
-            "mean_score": 0.9997
+            "mean_score": 0.9254
           },
           "SCOPE_CREEP": {
-            "n": 33,
-            "recall": 1.0,
-            "mean_score": 0.9992
+            "n": 27,
+            "recall": 0.8889,
+            "mean_score": 0.885
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.9995
+            "n": 84,
+            "recall": 0.6071,
+            "mean_score": 0.6009
           }
         }
       },
       "ml_without_dtl": {
-        "pr_auc": 0.9217,
-        "roc_auc": 0.9886,
-        "precision": 0.8285,
-        "recall": 0.8285,
-        "f1_score": 0.8285,
-        "recall_at_0.5pct_fpr": 0.7992,
-        "precision_at_100": 1.0,
-        "false_positive_rate": 0.0122,
+        "pr_auc": 0.7587,
+        "roc_auc": 0.9575,
+        "precision": 0.67,
+        "recall": 0.6634,
+        "f1_score": 0.6667,
+        "recall_at_0.5pct_fpr": 0.4901,
+        "precision_at_100": 0.92,
+        "false_positive_rate": 0.02359,
         "confusion_matrix": {
-          "tn": 3320,
-          "fp": 41,
-          "fn": 41,
-          "tp": 198
+          "tn": 2732,
+          "fp": 66,
+          "fn": 68,
+          "tp": 134
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 444471.17,
-          "legitimate_value_blocked_inr": 89986.32,
-          "fraud_value_missed_inr": 59841.67,
-          "net_value_saved_inr": 354484.85
+          "fraud_value_caught_inr": 377814.8,
+          "legitimate_value_blocked_inr": 68628.99,
+          "fraud_value_missed_inr": 46592.06,
+          "net_value_saved_inr": 309185.81
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Global ML without DTL features",
-        "feature_count": 17,
+        "feature_count": 25,
         "latency": {
-          "p50_ms": 0.2257,
-          "p95_ms": 0.3939,
-          "p99_ms": 0.5768,
-          "mean_ms": 0.2542,
+          "p50_ms": 1.4043,
+          "p95_ms": 1.9032,
+          "p99_ms": 2.0673,
+          "mean_ms": 1.4283,
           "n_measured": 300
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.4459,
-            "mean_score": 0.4837
+            "n": 64,
+            "recall": 0.5625,
+            "mean_score": 0.5223
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
+            "n": 14,
             "recall": 1.0,
-            "mean_score": 0.9745
+            "mean_score": 0.9747
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
+            "n": 13,
             "recall": 1.0,
-            "mean_score": 0.9999
+            "mean_score": 0.9942
           },
           "SCOPE_CREEP": {
-            "n": 33,
-            "recall": 1.0,
-            "mean_score": 0.9998
+            "n": 27,
+            "recall": 0.963,
+            "mean_score": 0.8984
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 84,
+            "recall": 0.5357,
+            "mean_score": 0.5579
           }
         }
       },
       "hybrid_dtl_ml": {
-        "pr_auc": 0.9899,
-        "roc_auc": 0.9987,
-        "precision": 0.9915,
-        "recall": 0.9707,
-        "f1_score": 0.981,
-        "recall_at_0.5pct_fpr": 0.9707,
+        "pr_auc": 0.9533,
+        "roc_auc": 0.9858,
+        "precision": 0.9944,
+        "recall": 0.8812,
+        "f1_score": 0.9344,
+        "recall_at_0.5pct_fpr": 0.896,
         "precision_at_100": 1.0,
-        "false_positive_rate": 0.0006,
+        "false_positive_rate": 0.00036,
         "confusion_matrix": {
-          "tn": 3359,
-          "fp": 2,
-          "fn": 7,
-          "tp": 232
+          "tn": 2797,
+          "fp": 1,
+          "fn": 24,
+          "tp": 178
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 483174.34,
-          "legitimate_value_blocked_inr": 4167.84,
-          "fraud_value_missed_inr": 21138.5,
-          "net_value_saved_inr": 479006.5
+          "fraud_value_caught_inr": 382175.38,
+          "legitimate_value_blocked_inr": 4727.75,
+          "fraud_value_missed_inr": 42231.48,
+          "net_value_saved_inr": 377447.63
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "FORSETI hybrid (DTL features + GBDT)",
-        "feature_count": 29,
+        "feature_count": 37,
         "latency": {
-          "p50_ms": 0.2575,
-          "p95_ms": 0.5362,
-          "p99_ms": 0.7341,
-          "mean_ms": 0.3102,
+          "p50_ms": 1.2822,
+          "p95_ms": 1.8926,
+          "p99_ms": 2.3216,
+          "mean_ms": 1.3573,
           "n_measured": 300
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.9054,
-            "mean_score": 0.9068
+            "n": 64,
+            "recall": 0.8438,
+            "mean_score": 0.839
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
+            "n": 14,
             "recall": 1.0,
-            "mean_score": 0.9995
+            "mean_score": 0.9997
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
+            "n": 13,
             "recall": 1.0,
-            "mean_score": 0.9999
+            "mean_score": 0.9602
           },
           "SCOPE_CREEP": {
-            "n": 33,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 27,
+            "recall": 0.8889,
+            "mean_score": 0.8761
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 0.9999
+            "n": 84,
+            "recall": 0.869,
+            "mean_score": 0.8604
           }
         }
       },
       "dtl_invariant_only": {
-        "pr_auc": 0.4221,
-        "roc_auc": 0.9401,
-        "precision": 0.4328,
-        "recall": 0.9707,
-        "f1_score": 0.5987,
+        "pr_auc": 0.253,
+        "roc_auc": 0.8519,
+        "precision": 0.2829,
+        "recall": 0.8614,
+        "f1_score": 0.4259,
         "recall_at_0.5pct_fpr": 0.0,
-        "precision_at_100": 0.5,
-        "false_positive_rate": 0.09045,
+        "precision_at_100": 0.23,
+        "false_positive_rate": 0.15761,
         "confusion_matrix": {
-          "tn": 3057,
-          "fp": 304,
-          "fn": 7,
-          "tp": 232
+          "tn": 2357,
+          "fp": 441,
+          "fn": 28,
+          "tp": 174
         },
         "financial_impact": {
-          "fraud_value_caught_inr": 483174.34,
-          "legitimate_value_blocked_inr": 369475.93,
-          "fraud_value_missed_inr": 21138.5,
-          "net_value_saved_inr": 113698.41
+          "fraud_value_caught_inr": 397635.4,
+          "legitimate_value_blocked_inr": 446479.93,
+          "fraud_value_missed_inr": 26771.46,
+          "net_value_saved_inr": -48844.53
         },
         "threshold": 0.5,
-        "n_samples": 3600,
-        "n_positives": 239,
+        "n_samples": 3000,
+        "n_positives": 202,
         "model_variant": "Deterministic DTL invariant engine (no ML)",
         "feature_count": 3,
         "is_deterministic": true,
@@ -722,343 +722,343 @@
           "INV_03_UNAUTHORIZED_MCC"
         ],
         "latency": {
-          "p50_ms": 0.0003,
-          "p95_ms": 0.0004,
-          "p99_ms": 0.0004,
-          "mean_ms": 0.0003,
-          "n_measured": 3600
+          "p50_ms": 0.0012,
+          "p95_ms": 0.0013,
+          "p99_ms": 0.0016,
+          "mean_ms": 0.0012,
+          "n_measured": 3000
         },
         "per_family_recall": {
           "CROSS_RAIL_SPLIT": {
-            "n": 74,
-            "recall": 0.9054,
-            "mean_score": 0.9054
+            "n": 64,
+            "recall": 0.8438,
+            "mean_score": 0.8438
           },
           "INTENT_LAUNDERING": {
-            "n": 16,
+            "n": 14,
             "recall": 1.0,
             "mean_score": 1.0
           },
           "REVOCATION_FLOOD": {
-            "n": 16,
+            "n": 13,
             "recall": 1.0,
             "mean_score": 1.0
           },
           "SCOPE_CREEP": {
-            "n": 33,
+            "n": 27,
             "recall": 1.0,
             "mean_score": 1.0
           },
           "VELOCITY_BURST": {
-            "n": 100,
-            "recall": 1.0,
-            "mean_score": 1.0
+            "n": 84,
+            "recall": 0.7857,
+            "mean_score": 0.7857
           }
         }
       }
     },
     "measured_dtl_lift": {
       "definition": "PR-AUC(hybrid with DTL features) - PR-AUC(same model without DTL features), same test slice",
-      "pr_auc_hybrid_dtl": 0.9899,
-      "pr_auc_without_dtl": 0.9217,
-      "pr_auc_lift": 0.0682,
-      "pr_auc_lift_vs_per_rail_silo": 0.0749,
+      "pr_auc_hybrid_dtl": 0.9533,
+      "pr_auc_without_dtl": 0.7587,
+      "pr_auc_lift": 0.1946,
+      "pr_auc_lift_vs_per_rail_silo": 0.2078,
       "cross_rail_split_recall": {
-        "rules_only": 0.2568,
+        "rules_only": 0.3906,
         "per_rail_ml": 0.5,
-        "ml_without_dtl": 0.4459,
-        "hybrid_dtl_ml": 0.9054,
-        "dtl_invariant_only": 0.9054,
+        "ml_without_dtl": 0.5625,
+        "hybrid_dtl_ml": 0.8438,
+        "dtl_invariant_only": 0.8438,
         "note": "Every learned model scores each transaction in isolation, so a cross-rail leg looks ordinary to it. The deterministic DTL invariant compares AGGREGATE exposure against the delegated ceiling and is therefore holdout-independent: it does not need to have seen the attack family before."
       }
     }
   },
   "baselines": {
     "rules_only": {
-      "pr_auc": 0.281,
-      "roc_auc": 0.8222,
-      "precision": 0.4265,
-      "recall": 0.7531,
-      "f1_score": 0.5446,
+      "pr_auc": 0.1262,
+      "roc_auc": 0.6618,
+      "precision": 0.1899,
+      "recall": 0.4653,
+      "f1_score": 0.2697,
       "recall_at_0.5pct_fpr": 0.0,
-      "precision_at_100": 0.21,
-      "false_positive_rate": 0.072,
+      "precision_at_100": 0.19,
+      "false_positive_rate": 0.14332,
       "confusion_matrix": {
-        "tn": 3119,
-        "fp": 242,
-        "fn": 59,
-        "tp": 180
+        "tn": 2397,
+        "fp": 401,
+        "fn": 108,
+        "tp": 94
       },
       "financial_impact": {
-        "fraud_value_caught_inr": 459169.94,
-        "legitimate_value_blocked_inr": 1408514.17,
-        "fraud_value_missed_inr": 45142.9,
-        "net_value_saved_inr": -949344.23
+        "fraud_value_caught_inr": 369975.92,
+        "legitimate_value_blocked_inr": 1272818.32,
+        "fraud_value_missed_inr": 54430.94,
+        "net_value_saved_inr": -902842.4
       },
       "threshold": 0.5,
-      "n_samples": 3600,
-      "n_positives": 239,
+      "n_samples": 3000,
+      "n_positives": 202,
       "model_variant": "Rules-only (static per-rail limits)",
       "feature_count": 0,
       "latency": {
-        "p50_ms": 0.003,
-        "p95_ms": 0.0033,
-        "p99_ms": 0.0041,
-        "mean_ms": 0.0031,
-        "n_measured": 3600
+        "p50_ms": 0.023,
+        "p95_ms": 0.0534,
+        "p99_ms": 0.2629,
+        "mean_ms": 0.036,
+        "n_measured": 3000
       },
       "per_family_recall": {
         "CROSS_RAIL_SPLIT": {
-          "n": 74,
-          "recall": 0.2568,
-          "mean_score": 0.2554
+          "n": 64,
+          "recall": 0.3906,
+          "mean_score": 0.3531
         },
         "INTENT_LAUNDERING": {
-          "n": 16,
-          "recall": 0.75,
-          "mean_score": 0.65
+          "n": 14,
+          "recall": 0.7857,
+          "mean_score": 0.6786
         },
         "REVOCATION_FLOOD": {
-          "n": 16,
-          "recall": 1.0,
-          "mean_score": 0.8219
+          "n": 13,
+          "recall": 0.6923,
+          "mean_score": 0.5923
         },
         "SCOPE_CREEP": {
-          "n": 33,
+          "n": 27,
           "recall": 1.0,
-          "mean_score": 0.8303
+          "mean_score": 0.8333
         },
         "VELOCITY_BURST": {
-          "n": 100,
-          "recall": 1.0,
-          "mean_score": 0.8
+          "n": 84,
+          "recall": 0.2619,
+          "mean_score": 0.2464
         }
       }
     },
     "per_rail_ml": {
-      "pr_auc": 0.7564,
-      "roc_auc": 0.884,
-      "precision": 0.9816,
-      "recall": 0.6695,
-      "f1_score": 0.796,
-      "recall_at_0.5pct_fpr": 0.6904,
-      "precision_at_100": 1.0,
-      "false_positive_rate": 0.00089,
+      "pr_auc": 0.6534,
+      "roc_auc": 0.9399,
+      "precision": 0.736,
+      "recall": 0.4554,
+      "f1_score": 0.5627,
+      "recall_at_0.5pct_fpr": 0.3762,
+      "precision_at_100": 0.8,
+      "false_positive_rate": 0.01179,
       "confusion_matrix": {
-        "tn": 3358,
-        "fp": 3,
-        "fn": 79,
-        "tp": 160
+        "tn": 2765,
+        "fp": 33,
+        "fn": 110,
+        "tp": 92
       },
       "financial_impact": {
-        "fraud_value_caught_inr": 343630.81,
-        "legitimate_value_blocked_inr": 3991.96,
-        "fraud_value_missed_inr": 160682.03,
-        "net_value_saved_inr": 339638.85
+        "fraud_value_caught_inr": 242357.25,
+        "legitimate_value_blocked_inr": 32287.39,
+        "fraud_value_missed_inr": 182049.61,
+        "net_value_saved_inr": 210069.86
       },
       "threshold": 0.5,
-      "n_samples": 3600,
-      "n_positives": 239,
+      "n_samples": 3000,
+      "n_positives": 202,
       "model_variant": "Per-rail ML (siloed, one model per rail)",
-      "feature_count": 16,
+      "feature_count": 24,
       "rails": {
         "CARD": {
           "status": "TRAINED",
-          "train_rows": 5825,
-          "test_rows": 1221
+          "train_rows": 4673,
+          "test_rows": 1004
         },
         "UPI": {
           "status": "TRAINED",
-          "train_rows": 5221,
-          "test_rows": 1181
+          "train_rows": 4485,
+          "test_rows": 1003
         },
         "AGENTIC": {
           "status": "TRAINED",
-          "train_rows": 5310,
-          "test_rows": 1198
+          "train_rows": 4453,
+          "test_rows": 993
         }
       },
       "latency": {
-        "p50_ms": 0.2073,
-        "p95_ms": 0.627,
-        "p99_ms": 0.7473,
-        "mean_ms": 0.2808,
+        "p50_ms": 1.3066,
+        "p95_ms": 1.8431,
+        "p99_ms": 2.1802,
+        "mean_ms": 1.3537,
         "n_measured": 300
       },
       "per_family_recall": {
         "CROSS_RAIL_SPLIT": {
-          "n": 74,
-          "recall": 0.0,
-          "mean_score": 0.0003
+          "n": 64,
+          "recall": 0.1719,
+          "mean_score": 0.1877
         },
         "INTENT_LAUNDERING": {
-          "n": 16,
-          "recall": 1.0,
-          "mean_score": 0.9969
+          "n": 14,
+          "recall": 0.7143,
+          "mean_score": 0.7088
         },
         "REVOCATION_FLOOD": {
-          "n": 16,
-          "recall": 0.6875,
-          "mean_score": 0.707
+          "n": 13,
+          "recall": 0.2308,
+          "mean_score": 0.2289
         },
         "SCOPE_CREEP": {
-          "n": 33,
-          "recall": 1.0,
-          "mean_score": 0.9998
+          "n": 27,
+          "recall": 0.8889,
+          "mean_score": 0.8503
         },
         "VELOCITY_BURST": {
-          "n": 100,
-          "recall": 1.0,
-          "mean_score": 0.9997
+          "n": 84,
+          "recall": 0.5238,
+          "mean_score": 0.5187
         }
       }
     },
     "ml_without_dtl": {
-      "pr_auc": 0.7548,
-      "roc_auc": 0.883,
-      "precision": 1.0,
-      "recall": 0.6904,
-      "f1_score": 0.8168,
-      "recall_at_0.5pct_fpr": 0.6904,
-      "precision_at_100": 1.0,
-      "false_positive_rate": 0.0,
+      "pr_auc": 0.658,
+      "roc_auc": 0.942,
+      "precision": 0.7611,
+      "recall": 0.4257,
+      "f1_score": 0.546,
+      "recall_at_0.5pct_fpr": 0.3614,
+      "precision_at_100": 0.8,
+      "false_positive_rate": 0.00965,
       "confusion_matrix": {
-        "tn": 3361,
-        "fp": 0,
-        "fn": 74,
-        "tp": 165
+        "tn": 2771,
+        "fp": 27,
+        "fn": 116,
+        "tp": 86
       },
       "financial_impact": {
-        "fraud_value_caught_inr": 349956.57,
-        "legitimate_value_blocked_inr": 0.0,
-        "fraud_value_missed_inr": 154356.27,
-        "net_value_saved_inr": 349956.57
+        "fraud_value_caught_inr": 265740.1,
+        "legitimate_value_blocked_inr": 26597.72,
+        "fraud_value_missed_inr": 158666.76,
+        "net_value_saved_inr": 239142.38
       },
       "threshold": 0.5,
-      "n_samples": 3600,
-      "n_positives": 239,
+      "n_samples": 3000,
+      "n_positives": 202,
       "model_variant": "Global ML without DTL features",
-      "feature_count": 17,
+      "feature_count": 25,
       "latency": {
-        "p50_ms": 0.2032,
-        "p95_ms": 0.2999,
-        "p99_ms": 0.3946,
-        "mean_ms": 0.2171,
+        "p50_ms": 1.5328,
+        "p95_ms": 2.1539,
+        "p99_ms": 2.5813,
+        "mean_ms": 1.5644,
         "n_measured": 300
       },
       "per_family_recall": {
         "CROSS_RAIL_SPLIT": {
-          "n": 74,
-          "recall": 0.0,
-          "mean_score": 0.0001
+          "n": 64,
+          "recall": 0.1719,
+          "mean_score": 0.2009
         },
         "INTENT_LAUNDERING": {
-          "n": 16,
-          "recall": 1.0,
-          "mean_score": 0.9992
+          "n": 14,
+          "recall": 0.9286,
+          "mean_score": 0.8813
         },
         "REVOCATION_FLOOD": {
-          "n": 16,
-          "recall": 1.0,
-          "mean_score": 0.9999
+          "n": 13,
+          "recall": 0.1538,
+          "mean_score": 0.1925
         },
         "SCOPE_CREEP": {
-          "n": 33,
-          "recall": 1.0,
-          "mean_score": 0.9999
+          "n": 27,
+          "recall": 0.9259,
+          "mean_score": 0.9095
         },
         "VELOCITY_BURST": {
-          "n": 100,
-          "recall": 1.0,
-          "mean_score": 0.9999
+          "n": 84,
+          "recall": 0.4167,
+          "mean_score": 0.4468
         }
       }
     },
     "hybrid_dtl_ml": {
-      "pr_auc": 0.8926,
-      "roc_auc": 0.9815,
-      "precision": 1.0,
-      "recall": 0.6904,
-      "f1_score": 0.8168,
-      "recall_at_0.5pct_fpr": 0.6904,
+      "pr_auc": 0.94,
+      "roc_auc": 0.9828,
+      "precision": 0.9774,
+      "recall": 0.8564,
+      "f1_score": 0.9129,
+      "recall_at_0.5pct_fpr": 0.8812,
       "precision_at_100": 1.0,
-      "false_positive_rate": 0.0,
+      "false_positive_rate": 0.00143,
       "confusion_matrix": {
-        "tn": 3361,
-        "fp": 0,
-        "fn": 74,
-        "tp": 165
+        "tn": 2794,
+        "fp": 4,
+        "fn": 29,
+        "tp": 173
       },
       "financial_impact": {
-        "fraud_value_caught_inr": 349956.57,
-        "legitimate_value_blocked_inr": 0.0,
-        "fraud_value_missed_inr": 154356.27,
-        "net_value_saved_inr": 349956.57
+        "fraud_value_caught_inr": 356760.46,
+        "legitimate_value_blocked_inr": 7267.87,
+        "fraud_value_missed_inr": 67646.4,
+        "net_value_saved_inr": 349492.59
       },
       "threshold": 0.5,
-      "n_samples": 3600,
-      "n_positives": 239,
+      "n_samples": 3000,
+      "n_positives": 202,
       "model_variant": "FORSETI hybrid (DTL features + GBDT)",
-      "feature_count": 29,
+      "feature_count": 37,
       "latency": {
-        "p50_ms": 0.2129,
-        "p95_ms": 0.4795,
-        "p99_ms": 0.5559,
-        "mean_ms": 0.2541,
+        "p50_ms": 1.23,
+        "p95_ms": 1.8199,
+        "p99_ms": 2.1031,
+        "mean_ms": 1.2957,
         "n_measured": 300
       },
       "per_family_recall": {
         "CROSS_RAIL_SPLIT": {
-          "n": 74,
-          "recall": 0.0,
-          "mean_score": 0.0008
+          "n": 64,
+          "recall": 0.8281,
+          "mean_score": 0.8309
         },
         "INTENT_LAUNDERING": {
-          "n": 16,
+          "n": 14,
           "recall": 1.0,
-          "mean_score": 0.9999
+          "mean_score": 0.9997
         },
         "REVOCATION_FLOOD": {
-          "n": 16,
-          "recall": 1.0,
-          "mean_score": 0.9999
+          "n": 13,
+          "recall": 0.7692,
+          "mean_score": 0.7753
         },
         "SCOPE_CREEP": {
-          "n": 33,
-          "recall": 1.0,
-          "mean_score": 0.9999
+          "n": 27,
+          "recall": 0.8519,
+          "mean_score": 0.8583
         },
         "VELOCITY_BURST": {
-          "n": 100,
-          "recall": 1.0,
-          "mean_score": 0.9999
+          "n": 84,
+          "recall": 0.869,
+          "mean_score": 0.8676
         }
       }
     },
     "dtl_invariant_only": {
-      "pr_auc": 0.4221,
-      "roc_auc": 0.9401,
-      "precision": 0.4328,
-      "recall": 0.9707,
-      "f1_score": 0.5987,
+      "pr_auc": 0.253,
+      "roc_auc": 0.8519,
+      "precision": 0.2829,
+      "recall": 0.8614,
+      "f1_score": 0.4259,
       "recall_at_0.5pct_fpr": 0.0,
-      "precision_at_100": 0.5,
-      "false_positive_rate": 0.09045,
+      "precision_at_100": 0.23,
+      "false_positive_rate": 0.15761,
       "confusion_matrix": {
-        "tn": 3057,
-        "fp": 304,
-        "fn": 7,
-        "tp": 232
+        "tn": 2357,
+        "fp": 441,
+        "fn": 28,
+        "tp": 174
       },
       "financial_impact": {
-        "fraud_value_caught_inr": 483174.34,
-        "legitimate_value_blocked_inr": 369475.93,
-        "fraud_value_missed_inr": 21138.5,
-        "net_value_saved_inr": 113698.41
+        "fraud_value_caught_inr": 397635.4,
+        "legitimate_value_blocked_inr": 446479.93,
+        "fraud_value_missed_inr": 26771.46,
+        "net_value_saved_inr": -48844.53
       },
       "threshold": 0.5,
-      "n_samples": 3600,
-      "n_positives": 239,
+      "n_samples": 3000,
+      "n_positives": 202,
       "model_variant": "Deterministic DTL invariant engine (no ML)",
       "feature_count": 3,
       "is_deterministic": true,
@@ -1068,74 +1068,182 @@
         "INV_03_UNAUTHORIZED_MCC"
       ],
       "latency": {
-        "p50_ms": 0.0003,
-        "p95_ms": 0.0004,
-        "p99_ms": 0.0005,
-        "mean_ms": 0.0003,
-        "n_measured": 3600
+        "p50_ms": 0.0012,
+        "p95_ms": 0.0016,
+        "p99_ms": 0.0018,
+        "mean_ms": 0.0014,
+        "n_measured": 3000
       },
       "per_family_recall": {
         "CROSS_RAIL_SPLIT": {
-          "n": 74,
-          "recall": 0.9054,
-          "mean_score": 0.9054
+          "n": 64,
+          "recall": 0.8438,
+          "mean_score": 0.8438
         },
         "INTENT_LAUNDERING": {
-          "n": 16,
+          "n": 14,
           "recall": 1.0,
           "mean_score": 1.0
         },
         "REVOCATION_FLOOD": {
-          "n": 16,
+          "n": 13,
           "recall": 1.0,
           "mean_score": 1.0
         },
         "SCOPE_CREEP": {
-          "n": 33,
+          "n": 27,
           "recall": 1.0,
           "mean_score": 1.0
         },
         "VELOCITY_BURST": {
-          "n": 100,
-          "recall": 1.0,
-          "mean_score": 1.0
+          "n": 84,
+          "recall": 0.7857,
+          "mean_score": 0.7857
         }
       }
     }
   },
   "measured_dtl_lift": {
     "definition": "PR-AUC(hybrid with DTL features) - PR-AUC(same model without DTL features), same test slice",
-    "pr_auc_hybrid_dtl": 0.9899,
-    "pr_auc_without_dtl": 0.9217,
-    "pr_auc_lift": 0.0682,
-    "pr_auc_lift_vs_per_rail_silo": 0.0749,
+    "pr_auc_hybrid_dtl": 0.9533,
+    "pr_auc_without_dtl": 0.7587,
+    "pr_auc_lift": 0.1946,
+    "pr_auc_lift_vs_per_rail_silo": 0.2078,
     "cross_rail_split_recall": {
-      "rules_only": 0.2568,
+      "rules_only": 0.3906,
       "per_rail_ml": 0.5,
-      "ml_without_dtl": 0.4459,
-      "hybrid_dtl_ml": 0.9054,
-      "dtl_invariant_only": 0.9054,
+      "ml_without_dtl": 0.5625,
+      "hybrid_dtl_ml": 0.8438,
+      "dtl_invariant_only": 0.8438,
       "note": "Every learned model scores each transaction in isolation, so a cross-rail leg looks ordinary to it. The deterministic DTL invariant compares AGGREGATE exposure against the delegated ceiling and is therefore holdout-independent: it does not need to have seen the attack family before."
     }
   },
   "headline_finding": {
-    "claim": "Per-transaction ML cannot detect cross-rail splitting; the deterministic DTL aggregate-authority invariant is what catches it.",
+    "claim": "The deterministic DTL aggregate-authority invariant scores 0.8438 on CROSS_RAIL_SPLIT whether or not the family was in training (0.8438 seen), because it is arithmetic over the delegated grant - holdout-independent by construction, so this is an identity rather than a measurement that happened to come out equal. A model WITHOUT a cross-rail view reaches only 0.1719 held out: one leg genuinely looks like ordinary spending, so the signal is not in the transaction. That gap against hybrid ML's 0.8281 is wider than the 95% intervals at n=64, so it is a real separation and not sampling noise. Given DTL aggregate features, hybrid ML reaches 0.8281 held out against 0.8438 seen - a difference of 0.0157 that the 95% intervals at n=64 cannot resolve. The honest reading is that this run does not show the classifier degrading on an unseen family; it does NOT show that it never would, and a held-out result this close should not be presented as proven generalisation. The asymmetry is the point and it does not depend on the sample size: the invariant's two numbers are equal BY CONSTRUCTION, while the classifier's are two separate measurements that happen to be close on this run.",
     "cross_rail_split_recall_when_family_held_out": {
-      "rules_only": 0.2568,
-      "per_rail_ml": 0.0,
-      "ml_without_dtl": 0.0,
-      "hybrid_dtl_ml": 0.0,
-      "dtl_invariant_only": 0.9054,
+      "rules_only": 0.3906,
+      "per_rail_ml": 0.1719,
+      "ml_without_dtl": 0.1719,
+      "hybrid_dtl_ml": 0.8281,
+      "dtl_invariant_only": 0.8438,
       "note": "Every learned model scores each transaction in isolation, so a cross-rail leg looks ordinary to it. The deterministic DTL invariant compares AGGREGATE exposure against the delegated ceiling and is therefore holdout-independent: it does not need to have seen the attack family before."
     },
     "cross_rail_split_recall_when_family_seen": {
-      "rules_only": 0.2568,
+      "rules_only": 0.3906,
       "per_rail_ml": 0.5,
-      "ml_without_dtl": 0.4459,
-      "hybrid_dtl_ml": 0.9054,
-      "dtl_invariant_only": 0.9054,
+      "ml_without_dtl": 0.5625,
+      "hybrid_dtl_ml": 0.8438,
+      "dtl_invariant_only": 0.8438,
       "note": "Every learned model scores each transaction in isolation, so a cross-rail leg looks ordinary to it. The deterministic DTL invariant compares AGGREGATE exposure against the delegated ceiling and is therefore holdout-independent: it does not need to have seen the attack family before."
     },
-    "dtl_pr_auc_lift_when_family_seen": 0.0682
+    "dtl_pr_auc_lift_when_family_seen": 0.1946,
+    "cross_rail_split_recall_ci95": {
+      "method": "Wilson score interval, 95%",
+      "why": "The cross-rail slice is small. A point estimate alone invites a comparison between two architectures that the sample size cannot support, so the interval ships with the number.",
+      "held_out": {
+        "rules_only": {
+          "recall": 0.3906,
+          "n": 64,
+          "caught": 25,
+          "ci95": [
+            0.2806,
+            0.5131
+          ],
+          "ci95_halfwidth": 0.1162
+        },
+        "per_rail_ml": {
+          "recall": 0.1719,
+          "n": 64,
+          "caught": 11,
+          "ci95": [
+            0.0988,
+            0.2821
+          ],
+          "ci95_halfwidth": 0.0917
+        },
+        "ml_without_dtl": {
+          "recall": 0.1719,
+          "n": 64,
+          "caught": 11,
+          "ci95": [
+            0.0988,
+            0.2821
+          ],
+          "ci95_halfwidth": 0.0917
+        },
+        "hybrid_dtl_ml": {
+          "recall": 0.8281,
+          "n": 64,
+          "caught": 53,
+          "ci95": [
+            0.7179,
+            0.9012
+          ],
+          "ci95_halfwidth": 0.0917
+        },
+        "dtl_invariant_only": {
+          "recall": 0.8438,
+          "n": 64,
+          "caught": 54,
+          "ci95": [
+            0.7357,
+            0.9129
+          ],
+          "ci95_halfwidth": 0.0886
+        }
+      },
+      "seen": {
+        "rules_only": {
+          "recall": 0.3906,
+          "n": 64,
+          "caught": 25,
+          "ci95": [
+            0.2806,
+            0.5131
+          ],
+          "ci95_halfwidth": 0.1162
+        },
+        "per_rail_ml": {
+          "recall": 0.5,
+          "n": 64,
+          "caught": 32,
+          "ci95": [
+            0.381,
+            0.619
+          ],
+          "ci95_halfwidth": 0.119
+        },
+        "ml_without_dtl": {
+          "recall": 0.5625,
+          "n": 64,
+          "caught": 36,
+          "ci95": [
+            0.4409,
+            0.6771
+          ],
+          "ci95_halfwidth": 0.1181
+        },
+        "hybrid_dtl_ml": {
+          "recall": 0.8438,
+          "n": 64,
+          "caught": 54,
+          "ci95": [
+            0.7357,
+            0.9129
+          ],
+          "ci95_halfwidth": 0.0886
+        },
+        "dtl_invariant_only": {
+          "recall": 0.8438,
+          "n": 64,
+          "caught": 54,
+          "ci95": [
+            0.7357,
+            0.9129
+          ],
+          "ci95_halfwidth": 0.0886
+        }
+      }
+    }
   }
 }

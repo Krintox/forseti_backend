@@ -49,7 +49,18 @@ def score_round(round_summary: Dict[str, Any]) -> Dict[str, Any]:
     events = [e for e in round_summary.get("events", []) if e.get("round_id") == round_number]
 
     detected = bool(round_summary.get("detected", False))
-    contained = round_summary.get("winner") == "BLUE"
+    # CONTAINMENT is read from the outcome, not from `winner == "BLUE"`.
+    #
+    # Blue now also wins rounds it DETECTED without containing - a deception
+    # flagged on a transaction that breached no dimension of the grant. Deriving
+    # containment from the winner marked those `contained: true` while their
+    # score was 0.0, because nothing was prevented and no invariant fired. A
+    # round cannot be both fully contained and worth nothing.
+    outcome = round_summary.get("outcome")
+    contained = (
+        outcome == "CONTAINED" if outcome
+        else round_summary.get("winner") == "BLUE"
+    )
 
     started_at = _first_offset(events, "ATTACK_STARTED")
     detected_at = _first_offset(events, "INVARIANT_VIOLATION")
@@ -103,7 +114,6 @@ def score_round(round_summary: Dict[str, Any]) -> Dict[str, Any]:
     # The replacement uses three genuinely independent quantities, none of
     # which is wall-clock:
     #
-    #   containment  - was the round contained at all (the outcome)
     #   exposure     - what SHARE of the attempted objective was stopped
     #                  (a magnitude, not a boolean: stopping Rs 200 of a
     #                  Rs 12,000 objective is not the same as stopping all of it)
@@ -113,9 +123,22 @@ def score_round(round_summary: Dict[str, Any]) -> Dict[str, Any]:
     #                  property of the defence: catching a 4-leg split on leg 2
     #                  is genuinely better than catching it on leg 4.
     #
+    # SECOND correction, after a follow-up review: an intermediate version kept
+    # `contained` as a third term at 0.50. That was still half the score being
+    # one boolean - and worse, a boolean that is very nearly a THRESHOLD VIEW of
+    # `exposure_component`: a round is contained almost exactly when exposure
+    # was prevented. Counting both meant the same fact set half the score and
+    # then contributed to the other half as well.
+    #
+    # So the boolean is gone from the score. `contained` is still reported,
+    # because it is the plainest thing a judge wants to know - but it is a FACT
+    # about the round, not a term. What remains are two magnitudes that can move
+    # independently: an attack can be fully stopped late (high exposure, low
+    # earliness) or caught on step one after most of the money already moved
+    # (low exposure, high earliness), and the score distinguishes them.
+    #
     # Still a heuristic composite with no external ground truth, and still
-    # labelled as one - but now its terms are independent and none of them is
-    # a timer on the UI.
+    # labelled as one.
     attempted_total = sum(
         float((sr.get("tx", {}) or {}).get("amount", 0.0) or 0.0) for sr in step_results
     ) or 0.0
@@ -133,9 +156,8 @@ def score_round(round_summary: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     attack_chain_score = round(
-        0.50 * (1.0 if contained else 0.0)
-        + 0.30 * exposure_component
-        + 0.20 * earliness_component,
+        0.60 * exposure_component
+        + 0.40 * earliness_component,
         3,
     )
 

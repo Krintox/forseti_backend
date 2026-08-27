@@ -1,6 +1,6 @@
 {
-  "experiment_id": "EXP-20260818-143534",
-  "timestamp": "2026-08-18T14:35:34.160401+00:00",
+  "experiment_id": "EXP-20260825-202709",
+  "timestamp": "2026-08-25T20:27:09.203728+00:00",
   "model": {
     "backend": "xgboost",
     "backend_version": "3.4.1",
@@ -19,41 +19,110 @@
       "xgboost": "3.4.1",
       "lightgbm": "4.7.0",
       "shap": "0.52.0",
-      "matplotlib": "3.11.1"
+      "matplotlib": "3.11.1",
+      "networkx": "3.6.1"
     },
-    "feature_schema_version": "2.2.0"
+    "feature_schema_version": "2.3.0"
   },
   "dataset": {
-    "n_total": 24000,
-    "fraud_prevalence": 0.0709,
-    "feature_count": 29,
+    "n_total": 12000,
+    "fraud_prevalence": 0.0732,
+    "feature_count": 37,
     "attack_family_counts": {
-      "NONE": 22299,
-      "VELOCITY_BURST": 725,
-      "CROSS_RAIL_SPLIT": 522,
-      "SCOPE_CREEP": 227,
-      "INTENT_LAUNDERING": 114,
-      "REVOCATION_FLOOD": 113
+      "NONE": 11121,
+      "VELOCITY_BURST": 378,
+      "CROSS_RAIL_SPLIT": 265,
+      "SCOPE_CREEP": 118,
+      "INTENT_LAUNDERING": 59,
+      "REVOCATION_FLOOD": 59
     }
+  },
+  "leakage_audit": {
+    "passed": true,
+    "base_fraud_rate": 0.0732,
+    "purity_threshold": 0.95,
+    "min_support": 15,
+    "worst_fraud_precision_observed": 0.5223,
+    "leaking_fields": [],
+    "per_field": {
+      "merchant_mcc": {
+        "values_checked": 6,
+        "max_fraud_precision": 0.3276,
+        "max_lift_over_base": 4.472,
+        "leaking_values": []
+      },
+      "merchant_id": {
+        "values_checked": 22,
+        "max_fraud_precision": 0.5223,
+        "max_lift_over_base": 7.13,
+        "leaking_values": []
+      },
+      "device_id": {
+        "values_checked": 28,
+        "max_fraud_precision": 0.3116,
+        "max_lift_over_base": 4.254,
+        "leaking_values": []
+      },
+      "rail": {
+        "values_checked": 3,
+        "max_fraud_precision": 0.1013,
+        "max_lift_over_base": 1.383,
+        "leaking_values": []
+      }
+    },
+    "interpretation": "A field leaks when one of its VALUES determines the label. Positive leak: P(fraud|value) >= threshold, i.e. the value means fraud. Negative leak: the value excludes fraud far beyond the base rate. Values that are merely riskier or safer than average are legitimate signal and are not flagged - a fraud model is supposed to learn those.",
+    "family_separability": {
+      "CROSS_RAIL_SPLIT": {
+        "field": "merchant_id",
+        "value": "merch_software_mart",
+        "precision": 0.1274,
+        "recall": 0.0755
+      },
+      "INTENT_LAUNDERING": {
+        "field": "device_id",
+        "value": "dev_ring_beta",
+        "precision": 0.0318,
+        "recall": 0.0847
+      },
+      "SCOPE_CREEP": {
+        "field": "merchant_id",
+        "value": "merch_micro_pos",
+        "precision": 0.1808,
+        "recall": 0.2712
+      },
+      "REVOCATION_FLOOD": {
+        "field": "device_id",
+        "value": "dev_ring_beta",
+        "precision": 0.0318,
+        "recall": 0.0847
+      },
+      "VELOCITY_BURST": {
+        "field": "merchant_mcc",
+        "value": "5734",
+        "precision": 0.1379,
+        "recall": 0.127
+      }
+    },
+    "why_this_exists": "A previous revision of the generator gave four of six attack families an MCC that never occurred in legitimate traffic. Held-out REVOCATION_FLOOD then scored PR-AUC 1.000 with mean predicted probability exactly 1.0, and that was reported as generalisation when it was the model reading one categorical value. This gate runs before training so the claim is measured, not asserted."
   },
   "split_periods": {
     "train": {
       "start": "2026-05-01T08:01:34",
-      "end": "2026-07-15T00:07:19",
-      "n": 16356,
-      "prevalence": 0.046
+      "end": "2026-06-07T19:11:30",
+      "n": 8175,
+      "prevalence": 0.0476
     },
     "validation": {
-      "start": "2026-07-15T00:11:17",
-      "end": "2026-07-31T05:59:48",
-      "n": 3600,
-      "prevalence": 0.0739
+      "start": "2026-06-07T19:15:29",
+      "end": "2026-06-15T20:34:38",
+      "n": 1800,
+      "prevalence": 0.0783
     },
     "test": {
-      "start": "2026-07-31T06:12:11",
-      "end": "2026-08-16T16:33:07",
-      "n": 3600,
-      "prevalence": 0.0664
+      "start": "2026-06-15T20:51:35",
+      "end": "2026-06-23T21:10:19",
+      "n": 1800,
+      "prevalence": 0.0689
     }
   },
   "attack_family_holdout": {
@@ -64,51 +133,51 @@
     "note": "These attack families were removed from the training slice. Scores below are on unseen families.",
     "per_family": {
       "CROSS_RAIL_SPLIT": {
-        "n_attack_rows": 74,
-        "pr_auc": 0.3019,
-        "roc_auc": 0.9435,
-        "recall_at_threshold_0.5": 0.0,
-        "mean_score": 0.2874
+        "n_attack_rows": 37,
+        "pr_auc": 0.8405,
+        "roc_auc": 0.9543,
+        "recall_at_threshold_0.5": 0.8378,
+        "mean_score": 0.8468
       },
       "REVOCATION_FLOOD": {
-        "n_attack_rows": 16,
-        "pr_auc": 1.0,
-        "roc_auc": 1.0,
-        "recall_at_threshold_0.5": 1.0,
-        "mean_score": 1.0
+        "n_attack_rows": 9,
+        "pr_auc": 0.7929,
+        "roc_auc": 0.9797,
+        "recall_at_threshold_0.5": 0.8889,
+        "mean_score": 0.8897
       }
     }
   },
   "calibration": {
     "method": "isotonic regression on temporal validation slice",
-    "ece_before_calibration": 0.02039,
-    "ece_after_calibration": 0.00627,
-    "n_test_samples": 3600
+    "ece_before_calibration": 0.01377,
+    "ece_after_calibration": 0.00611,
+    "n_test_samples": 1800
   },
   "test_metrics": {
-    "pr_auc": 0.8882,
-    "roc_auc": 0.9825,
-    "precision": 1.0,
-    "recall": 0.6904,
-    "f1_score": 0.8168,
-    "recall_at_0.5pct_fpr": 0.7238,
-    "precision_at_100": 1.0,
-    "false_positive_rate": 0.0,
+    "pr_auc": 0.9209,
+    "roc_auc": 0.9766,
+    "precision": 0.9615,
+    "recall": 0.8065,
+    "f1_score": 0.8772,
+    "recall_at_0.5pct_fpr": 0.8226,
+    "precision_at_100": 0.98,
+    "false_positive_rate": 0.00239,
     "confusion_matrix": {
-      "tn": 3361,
-      "fp": 0,
-      "fn": 74,
-      "tp": 165
+      "tn": 1672,
+      "fp": 4,
+      "fn": 24,
+      "tp": 100
     },
     "financial_impact": {
-      "fraud_value_caught_inr": 349956.57,
-      "legitimate_value_blocked_inr": 0.0,
-      "fraud_value_missed_inr": 154356.27,
-      "net_value_saved_inr": 349956.57
+      "fraud_value_caught_inr": 214268.06,
+      "legitimate_value_blocked_inr": 11511.51,
+      "fraud_value_missed_inr": 29673.75,
+      "net_value_saved_inr": 202756.55
     },
     "threshold": 0.5,
-    "n_samples": 3600,
-    "n_positives": 239
+    "n_samples": 1800,
+    "n_positives": 124
   },
   "shap_global": {
     "method": "shap.TreeExplainer",
@@ -116,83 +185,139 @@
     "rows_explained": 500,
     "ranked": [
       {
-        "feature": "cart_intent_consistency_score",
-        "mean_abs_shap": 4.63103
-      },
-      {
-        "feature": "merchant_risk_score",
-        "mean_abs_shap": 2.299926
-      },
-      {
-        "feature": "semantic_drift_score",
-        "mean_abs_shap": 1.347594
-      },
-      {
         "feature": "exposure_after_tx_ratio",
-        "mean_abs_shap": 0.796049
+        "mean_abs_shap": 3.219082
       },
       {
         "feature": "amount",
-        "mean_abs_shap": 0.785765
+        "mean_abs_shap": 2.068837
       },
       {
         "feature": "pending_spend_global",
-        "mean_abs_shap": 0.608244
+        "mean_abs_shap": 1.063892
       },
       {
-        "feature": "mcc_entropy",
-        "mean_abs_shap": 0.169251
-      },
-      {
-        "feature": "stored_value_value_ratio",
-        "mean_abs_shap": 0.098638
+        "feature": "graph_merchant_pagerank",
+        "mean_abs_shap": 0.906478
       },
       {
         "feature": "remaining_headroom",
-        "mean_abs_shap": 0.078971
-      },
-      {
-        "feature": "rail_code",
-        "mean_abs_shap": 0.065131
-      },
-      {
-        "feature": "hour_of_day",
-        "mean_abs_shap": 0.063901
-      },
-      {
-        "feature": "authority_utilization_ratio",
-        "mean_abs_shap": 0.031906
-      },
-      {
-        "feature": "day_of_week",
-        "mean_abs_shap": 0.011276
-      },
-      {
-        "feature": "tx_velocity_1h",
-        "mean_abs_shap": 0.010393
-      },
-      {
-        "feature": "total_exposure_global",
-        "mean_abs_shap": 0.009617
-      },
-      {
-        "feature": "amount_deviation_from_rail_mean",
-        "mean_abs_shap": 0.004704
-      },
-      {
-        "feature": "merchant_mcc_code",
-        "mean_abs_shap": 0.004485
+        "mean_abs_shap": 0.808901
       },
       {
         "feature": "delegation_ttl_remaining_pct",
-        "mean_abs_shap": 0.002685
+        "mean_abs_shap": 0.754951
       },
       {
-        "feature": "retry_count",
-        "mean_abs_shap": 0.0
+        "feature": "day_of_week",
+        "mean_abs_shap": 0.491605
+      },
+      {
+        "feature": "cart_intent_consistency_score",
+        "mean_abs_shap": 0.472297
+      },
+      {
+        "feature": "graph_agent_betweenness",
+        "mean_abs_shap": 0.422737
+      },
+      {
+        "feature": "graph_agent_pagerank",
+        "mean_abs_shap": 0.325206
+      },
+      {
+        "feature": "mcc_entropy",
+        "mean_abs_shap": 0.294392
+      },
+      {
+        "feature": "graph_community_size_ratio",
+        "mean_abs_shap": 0.293301
+      },
+      {
+        "feature": "rail_code",
+        "mean_abs_shap": 0.28668
+      },
+      {
+        "feature": "tx_velocity_1h",
+        "mean_abs_shap": 0.213122
+      },
+      {
+        "feature": "hour_of_day",
+        "mean_abs_shap": 0.207471
+      },
+      {
+        "feature": "graph_cross_rail_fanout_velocity",
+        "mean_abs_shap": 0.20232
+      },
+      {
+        "feature": "graph_device_shared_count",
+        "mean_abs_shap": 0.147567
+      },
+      {
+        "feature": "cross_rail_velocity",
+        "mean_abs_shap": 0.144937
+      },
+      {
+        "feature": "total_exposure_global",
+        "mean_abs_shap": 0.138703
+      },
+      {
+        "feature": "merchant_mcc_code",
+        "mean_abs_shap": 0.127249
+      },
+      {
+        "feature": "amount_deviation_from_rail_mean",
+        "mean_abs_shap": 0.123463
+      },
+      {
+        "feature": "graph_agent_out_degree",
+        "mean_abs_shap": 0.078747
       },
       {
         "feature": "granted_limit",
+        "mean_abs_shap": 0.071443
+      },
+      {
+        "feature": "authority_utilization_ratio",
+        "mean_abs_shap": 0.056676
+      },
+      {
+        "feature": "active_subagents_count",
+        "mean_abs_shap": 0.04434
+      },
+      {
+        "feature": "graph_merchant_in_degree",
+        "mean_abs_shap": 0.034393
+      },
+      {
+        "feature": "semantic_drift_score",
+        "mean_abs_shap": 0.032538
+      },
+      {
+        "feature": "merchant_risk_score",
+        "mean_abs_shap": 0.030869
+      },
+      {
+        "feature": "num_rails_used_24h",
+        "mean_abs_shap": 0.018567
+      },
+      {
+        "feature": "revocation_rate_1h",
+        "mean_abs_shap": 0.01707
+      },
+      {
+        "feature": "regrant_frequency",
+        "mean_abs_shap": 0.014107
+      },
+      {
+        "feature": "stored_value_item_count",
+        "mean_abs_shap": 0.013734
+      },
+      {
+        "feature": "stored_value_value_ratio",
+        "mean_abs_shap": 0.011959
+      },
+      {
+        "feature": "retry_count",
         "mean_abs_shap": 0.0
       },
       {
@@ -200,31 +325,7 @@
         "mean_abs_shap": 0.0
       },
       {
-        "feature": "active_subagents_count",
-        "mean_abs_shap": 0.0
-      },
-      {
-        "feature": "cross_rail_velocity",
-        "mean_abs_shap": 0.0
-      },
-      {
-        "feature": "num_rails_used_24h",
-        "mean_abs_shap": 0.0
-      },
-      {
-        "feature": "stored_value_item_count",
-        "mean_abs_shap": 0.0
-      },
-      {
         "feature": "merchant_category_match_bool",
-        "mean_abs_shap": 0.0
-      },
-      {
-        "feature": "revocation_rate_1h",
-        "mean_abs_shap": 0.0
-      },
-      {
-        "feature": "regrant_frequency",
         "mean_abs_shap": 0.0
       },
       {
@@ -234,5 +335,5 @@
     ]
   },
   "explainability_method": "shap.TreeExplainer",
-  "elapsed_seconds": 2.96
+  "elapsed_seconds": 7.58
 }

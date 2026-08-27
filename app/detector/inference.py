@@ -29,6 +29,48 @@ from .feature_schema import ALL_FEATURE_NAMES, DTLFeatureExtractor
 _SERVING_HISTORY_DEPTH = 60
 
 
+#: Above this, the model's confidence is doing almost no independent work.
+#:
+#: `exposure_after_tx_ratio >= 1.0` means the transaction takes cumulative
+#: exposure past the delegated ceiling - which is, definitionally, what
+#: INV_01_GLOBAL_BUDGET_EXCEEDED checks. In the training data that region is
+#: labelled fraud with near-certainty, so an isotonic-calibrated model returns
+#: values at or near 1.0 there.
+#:
+#: That is not a bug and not a leak: the feature is a legitimate aggregate the
+#: model is entitled to read. But a calibrated 1.0000 on screen invites "your
+#: model is overconfident", and the honest answer is narrower and more useful:
+#: in this region the classifier is agreeing with arithmetic the invariant has
+#: already done, and is adding little. Its independent value is in the region
+#: BELOW the ceiling, where behaviour is the only signal.
+_DETERMINISTIC_REGION_RATIO = 1.0
+
+
+def confidence_provenance(probability: float, features: Dict[str, float]) -> Dict[str, Any]:
+    """
+    Says WHY a probability is what it is, when the answer is "arithmetic".
+
+    Surfaced next to the score so a near-1.0 reading is read correctly rather
+    than as the model being sure of something subtle.
+    """
+    ratio = float(features.get("exposure_after_tx_ratio", 0.0) or 0.0)
+    in_deterministic_region = ratio >= _DETERMINISTIC_REGION_RATIO
+    return {
+        "exposure_after_tx_ratio": round(ratio, 4),
+        "in_deterministic_region": in_deterministic_region,
+        "note": (
+            "This transaction takes exposure past the delegated ceiling. That condition is "
+            "definitionally a breach, the training labels reflect it, and a calibrated model "
+            "therefore saturates near 1.0 here - it is agreeing with arithmetic INV_01 has "
+            "already done, not adding independent evidence. The model's own contribution is "
+            "below the ceiling, where behaviour is the only signal."
+            if in_deterministic_region else
+            "Exposure stays inside the delegated ceiling, so no invariant settles this case. "
+            "The score here is the model's own judgement on behavioural shape."
+        ),
+    }
+
+
 class HybridMLDetectorInference:
     """
     Loads the trained GBDT + calibrator and scores single transactions.
@@ -253,4 +295,7 @@ class HybridMLDetectorInference:
         explanation: Dict[str, Any] = {"method": "not_requested", "contributions": {}}
         if explain:
             explanation = self.explain(features)
+        # Ships with EVERY evaluation, not only explained ones: a saturated
+        # score is exactly the case someone screenshots.
+        explanation["confidence_provenance"] = confidence_provenance(prob, features)
         return prob, is_anomaly, explanation

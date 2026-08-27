@@ -419,9 +419,21 @@ class TestVectorProfilesDoNotContaminateLaterRounds:
         "RAIL_SCOPE_VIOLATION": "RAIL",
         "PER_TX_BREACH": "PER_TX",
         "INTENT_LAUNDERING": "PURPOSE",
-        "SCOPE_CREEP": "MERCHANT",
         "LAPSED_MANDATE": "TIME",
     }
+
+    #: SCOPE_CREEP is deliberately NOT in the table above.
+    #:
+    #: It used to be, expecting MERCHANT - and it passed for the wrong reason.
+    #: Its out-of-scope leg used MCC 5311, which the PARENT grant also refuses,
+    #: so INV_03 fired at the parent level and the sub-delegation proved
+    #: nothing. (The vector's own comment claimed "the parent grant permits
+    #: 5311"; it does not.) The leg now uses 5499 - genuinely permitted to the
+    #: parent, genuinely denied to the sub-agent's link - so the ONLY thing
+    #: that refuses it is the chain, which is the entire point of the vector.
+    #:
+    #: Its assertion is therefore about CHAIN_* codes, below.
+    EXPECTED_CHAIN_CODES = {"CHAIN_MERCHANT_OUT_OF_SCOPE", "CHAIN_PER_TX_EXCEEDED"}
 
     def test_full_campaign_demonstrates_each_dimension_in_turn(self):
         import asyncio
@@ -438,6 +450,32 @@ class TestVectorProfilesDoNotContaminateLaterRounds:
             result = asyncio.run(orch.run_round_stream(
                 round_number=2, dtl_enabled=True, event_callback=None,
                 speed=100.0, strategy_override=strategy))
+            if strategy == "SCOPE_CREEP":
+                # Caught by the delegation CHAIN, never by a parent invariant.
+                #
+                # Running 5th, the grant may be fully consumed - four vectors
+                # spent it - and then issuing a sub-delegation pool is correctly
+                # refused, because a parent cannot lend authority it does not
+                # hold. Both endings are legitimate. What is NOT legitimate is
+                # the third one this used to do: issuance fails, no link exists,
+                # `evaluate_action` allows everything because an agent with no
+                # link acts under the root authority, and the vector silently
+                # tests nothing while reporting a clean round.
+                codes = {c.get("code") for c in (result.get("chain_violations") or [])}
+                refusals = [e for e in result.get("events", [])
+                            if "SUB-DELEGATION REFUSED" in (e.get("arrow_label") or "")]
+                assert (codes & self.EXPECTED_CHAIN_CODES) or refusals, (
+                    "SCOPE_CREEP neither exercised the chain nor stated why it could not - "
+                    "it silently stopped testing its own mechanism"
+                )
+                parent_dims = {s["proof"]["authority_dimension"]
+                               for s in result["step_results"] if s.get("proof")}
+                assert "MERCHANT" not in parent_dims, (
+                    "the parent grant refused the merchant too, so this round does not "
+                    "demonstrate sub-delegation scope at all"
+                )
+                continue
+
             proofs = [s["proof"] for s in result["step_results"] if s.get("proof")]
             assert proofs, f"{strategy} should violate its dimension"
             # Check the dimension appears ANYWHERE in the round, not only on
@@ -493,3 +531,52 @@ class TestVectorProfilesDoNotContaminateLaterRounds:
         assert auth.permitted_rail_values == ["UPI_CIRCLE"]
         assert auth.per_transaction_cap is None
         assert auth.global_budget_ceiling == 12000.0
+
+
+class TestScopeCreepExercisesTheChainOnAFreshGrant:
+    """
+    The campaign test above accepts a refusal, because by round five the grant
+    is genuinely exhausted. On a fresh grant there is no such excuse: the chain
+    must be what refuses the sub-agent, and the parent must NOT.
+    """
+
+    def test_the_chain_refuses_and_the_parent_does_not(self):
+        import asyncio
+
+        from app.arena.orchestrator import ArenaBattleOrchestrator
+
+        orch = ArenaBattleOrchestrator()
+        orch.reset(12000.0)
+        result = asyncio.run(orch.run_round_stream(
+            round_number=2, dtl_enabled=True, speed=100.0,
+            strategy_override="SCOPE_CREEP"))
+
+        codes = {c.get("code") for c in (result.get("chain_violations") or [])}
+        assert "CHAIN_MERCHANT_OUT_OF_SCOPE" in codes, (
+            f"expected the sub-delegation to refuse the merchant; got {sorted(codes)}"
+        )
+
+        parent_dims = {s["proof"]["authority_dimension"]
+                       for s in result["step_results"] if s.get("proof")}
+        assert "MERCHANT" not in parent_dims, (
+            "the PARENT grant also refused the merchant - the leg must use an MCC the "
+            "parent permits, or the vector proves nothing about sub-delegation"
+        )
+
+    def test_a_real_pool_is_carved_from_the_parent(self):
+        import asyncio
+
+        from app.arena.orchestrator import ArenaBattleOrchestrator
+
+        orch = ArenaBattleOrchestrator()
+        orch.reset(12000.0)
+        result = asyncio.run(orch.run_round_stream(
+            round_number=2, dtl_enabled=True, speed=100.0,
+            strategy_override="SCOPE_CREEP"))
+        issued = [e for e in result.get("events", [])
+                  if "SUB-DELEGATION" in (e.get("arrow_label") or "")
+                  and "REFUSED" not in (e.get("arrow_label") or "")]
+        assert issued, "no sub-delegation link was issued on a fresh grant"
+        assert issued[0]["payload"]["reserved_spend_global"] > 0, (
+            "reserved_spend_global stayed zero - the pool was not really carved"
+        )
