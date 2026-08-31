@@ -1,4 +1,4 @@
-# LEARN_08 — Cryptographic Audit & Post-Quantum Signatures
+# LEARN_08: Cryptographic Audit & Post-Quantum Signatures
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md), [LEARN_07](LEARN_07_ARENA_AND_EVENTS.md)  
 > **You will be able to:**
@@ -186,4 +186,4 @@ Security claims must define their exact threat boundary (`docs/RESPONSIBLE_RESEA
 ---
 
 ## Where to go next
-→ [LEARN_09 — AI Agent Layer](LEARN_09_AI_AGENT_LAYER.md)
+→ [LEARN_09. AI Agent Layer](LEARN_09_AI_AGENT_LAYER.md)

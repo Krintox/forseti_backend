@@ -1,4 +1,4 @@
-# LEARN_15 — Known Gaps, Documentation Drift & Discrepancies
+# LEARN_15: Known Gaps, Documentation Drift & Discrepancies
 
 > **Prerequisites:** [LEARN_00](LEARN_00_START_HERE.md) through [LEARN_14](LEARN_14_TEACH_IT_BACK.md)  
 > **You will be able to:**
@@ -152,7 +152,7 @@ When defending FORSETI, openly state these technical limitations:
 <summary>Answers</summary>
 
 <!--claims-ok--> (records the count as it stood when written)
-1. Exactly 217 tests collected in code as of the tokenization/settlement follow-up (67 at the time this question was first written, when older markdown docs still claimed 52) — see LEARN_12 for the current per-file breakdown.
+1. Exactly 217 tests collected in code as of the tokenization/settlement follow-up (67 at the time this question was first written, when older markdown docs still claimed 52). See LEARN_12 for the current per-file breakdown.
 2. Because it implements an obsolete 13-feature extractor that is imported by no module; `detector/feature_schema.py` is the active 37-feature extractor across 6 groups.
 3. `NOT RUN / DATASET UNAVAILABLE` because licensed PaySim and ULB CSV files are not redistributed.
 4. No. The UI displays live PQC status dynamically fetched from the `/api/pqc/status` and `/api/pqc/verify` endpoints.
@@ -167,7 +167,7 @@ The modules covered in LEARN_16 through LEARN_21 introduced their own honestly-d
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│         AGENTIC SECURITY EXPANSION — DECLARED SCOPE BOUNDARIES         │
+│         AGENTIC SECURITY EXPANSION. DECLARED SCOPE BOUNDARIES         │
 ├────────────────────────────────────────────────────────────────────────┤
 │ • Kill Chain: RESOLVED. All 11 stages now have an implemented vector - │
 │   SETTLEMENT_CONFLICT and RECONCILIATION_DRIFT (LEARN_21) closed the   │
@@ -204,4 +204,4 @@ Building Graph Sentinel (LEARN_19) produced a genuine methodology bug: the first
 
 You have completed the original 16-chapter **FORSETI Codebase Tutor Course** covering the DTL core, simulator, ML detector, arena, crypto audit, AI agents, frontend, pipelines, and tests. The course continues with five more chapters covering the Agentic Payment Security Runtime expansion.
 
-→ Continue to [LEARN_16 — The Agent Intent Firewall](LEARN_16_INTENT_FIREWALL.md)
+→ Continue to [LEARN_16. The Agent Intent Firewall](LEARN_16_INTENT_FIREWALL.md)

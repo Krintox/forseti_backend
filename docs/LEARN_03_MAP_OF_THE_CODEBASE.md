@@ -1,4 +1,4 @@
-# LEARN_03 — Map of the Codebase
+# LEARN_03: Map of the Codebase
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md), [LEARN_02](LEARN_02_TECH_STACK.md)  
 > **You will be able to:**
@@ -77,11 +77,11 @@ Forseti/
 
 | File | Lines | Primary Purpose | What breaks if you delete this file? |
 |---|---:|---|---|
-| `dtl/ledger.py` | 231 | Global authority ledger, four-bucket exposure, and `try_reserve()` — the atomic check-and-book that replaced a check-then-act race | The system cannot track multi-rail spend exposure; cross-rail split detection breaks completely, and concurrent authorisations can overspend the ceiling. |
+| `dtl/ledger.py` | 231 | Global authority ledger, four-bucket exposure, and `try_reserve()`, the atomic check-and-book that replaced a check-then-act race | The system cannot track multi-rail spend exposure; cross-rail split detection breaks completely, and concurrent authorisations can overspend the ceiling. |
 | `dtl/invariant_engine.py` | 536 | The 7 deterministic authority invariants plus `INV_08`, the enforced policy state | Invariant checks fail; the system becomes 100% reliant on ML and loses all cross-rail holdout defense. |
 | `dtl/cost_governor.py` | 241 | Proportionate containment, with an explicit proof-precedence order | Invariant violations result in total system failure or unhandled exceptions instead of graceful partial auth. |
-| `dtl/sku_catalogue.py` | 149 | Attested SKU catalogue — decides what a line item *is*, independently of what the merchant calls it | `INV_02` falls back to trusting merchant free text, and renaming a gift card evades the purpose check. |
-| `dtl/beneficiary_directory.py` | 244 | Attested biller directory — the lookup a substitution attack actually poisons | `BENEFICIARY_DRIFT` reverts to a hardcoded VPA with no modelled mechanism. |
+| `dtl/sku_catalogue.py` | 149 | Attested SKU catalogue. Decides what a line item *is*, independently of what the merchant calls it | `INV_02` falls back to trusting merchant free text, and renaming a gift card evades the purpose check. |
+| `dtl/beneficiary_directory.py` | 244 | Attested biller directory, the lookup a substitution attack actually poisons | `BENEFICIARY_DRIFT` reverts to a hardcoded VPA with no modelled mechanism. |
 | `dtl/delegation_chain.py` | 348 | Sub-delegation links with monotonic narrowing and attestation digests | An agent can grant authority it does not hold, and forged links are indistinguishable from issued ones. |
 | `dtl/feature_factory.py` | 68 | *Vestigial 13-feature extractor (unused)* | Nothing breaks (vestigial). |
 
@@ -242,7 +242,7 @@ Forseti/
 
 ---
 
-### P. Agentic Security Runtime Expansion — New Packages
+### P. Agentic Security Runtime Expansion: New Packages
 
 Five new backend packages were added by the Agentic Security Runtime expansion, each covered in its own LEARN chapter rather than repeated here:
 
@@ -404,4 +404,4 @@ Here is the exact code execution path when an agent attempts a ₹4,000 transact
 ---
 
 ## Where to go next
-→ [LEARN_04 — The DTL Core](LEARN_04_THE_DTL_CORE.md)
+→ [LEARN_04. The DTL Core](LEARN_04_THE_DTL_CORE.md)

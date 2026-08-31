@@ -79,9 +79,11 @@ then test on it:
 | Deterministic invariant | 0.844 | 0.844 |
 
 Read the middle rows, not the bottom one. A model with no cross-rail view sits at 0.172 held out
-and still only reaches about 0.5 when you train it directly on the attack. The information is not
-inside any single transaction. Give the same model the aggregate and it reaches 0.828 on a family
-it has never seen, with `exposure_after_tx_ratio` as its top SHAP feature.
+and still only reaches about 0.5 when you train it directly on the attack. The rail sees the
+payment but not the cross-rail authority context needed to establish that a violation happened,
+so the signal is not recoverable from one transaction alone. Give the same model the aggregate and
+it reaches 0.828 on a family it has never seen, with `exposure_after_tx_ratio` as its top SHAP
+feature.
 
 Measured feature lift from the DTL group: +0.2302 PR-AUC (0.7261 to 0.9563). It holds at the
 deployed 0.5 threshold too, not only in threshold-free ranking.

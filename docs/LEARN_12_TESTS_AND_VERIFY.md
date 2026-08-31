@@ -1,4 +1,4 @@
-# LEARN_12 — Automated Tests & Self-Verification
+# LEARN_12: Automated Tests & Self-Verification
 
 > **Prerequisites:** [LEARN_03](LEARN_03_MAP_OF_THE_CODEBASE.md), [LEARN_11](LEARN_11_PIPELINES_AND_ARTIFACTS.md)  
 > **You will be able to:**
@@ -108,7 +108,7 @@ Proving that `try_reserve()` is atomic requires showing that the *non-atomic*
 version it replaced was not. So the file contains a deliberate check-then-act
 implementation, runs 60 threads at it, and asserts it **overspends**. If that
 control ever stops overspending, the test that matters has stopped meaning
-anything — a race that no longer reproduces cannot demonstrate that the fix
+anything, a race that no longer reproduces cannot demonstrate that the fix
 prevents it.
 
 **`test_suspension_is_enforced.py` ships a control that is supposed to PASS.**
@@ -119,7 +119,7 @@ equally well against an engine that rejected everything.
 
 ---
 
-## 1b. The browser suite — `frontend/e2e/`
+## 1b. The browser suite: `frontend/e2e/`
 
 The backend suite cannot see the surface a judge touches. Two Node scripts do,
 driving a real browser against a live stack:
@@ -138,20 +138,20 @@ not have:
 |---|---|
 | responsive | A `w-60 shrink-0` sidebar left about 150 px of usable content at 390 px, pushing three pages past the right edge |
 | responsive | Explainability's SHAP rows reserved 304 px of fixed-width columns |
-| functional | The Policy Center kept a hand-written copy of the escalation ladder that had drifted — `AGENT_SUSPENDED` was missing, so the top rung highlighted nothing |
+| functional | The Policy Center kept a hand-written copy of the escalation ladder that had drifted, `AGENT_SUSPENDED` was missing, so the top rung highlighted nothing |
 | functional | A client disconnecting mid-run latched `is_running` server-side, disabling every control until the process restarted |
 
 The functional suite's sharpest check is the cheapest one: it fails if the
 literal strings `undefined`, `NaN` or `[object Object]` reach the DOM on any
 route. A backend field renamed in a refactor still typechecks on the frontend
-wherever it is read off an `any` — and then renders as the word "undefined" in
+wherever it is read off an `any`, and then renders as the word "undefined" in
 front of whoever is watching.
 
 ---
 
 *Note on `backend/tests/verify_all.py`:* This file contains a standalone Python `unittest` runner holding high-level integration checks. It is designed to be run directly via `python backend/tests/verify_all.py` and is not collected by standard `pytest tests/`.
 
-*Note on running bare `pytest`:* `backend/pytest.ini` scopes discovery to `tests/` (`testpaths = tests`). Without it, a bare `pytest` invoked from `backend/` would also try to collect `app/fidelity/categorical_test.py` and `app/fidelity/ks_test.py` — implementation modules that happen to match pytest's default `*_test.py` discovery pattern — and crash on their relative imports before running anything.
+*Note on running bare `pytest`:* `backend/pytest.ini` scopes discovery to `tests/` (`testpaths = tests`). Without it, a bare `pytest` invoked from `backend/` would also try to collect `app/fidelity/categorical_test.py` and `app/fidelity/ks_test.py`, implementation modules that happen to match pytest's default `*_test.py` discovery pattern, and crash on their relative imports before running anything.
 
 ---
 
@@ -192,13 +192,13 @@ no-DTL ML  held-out/seen: 0.1719 / 0.5625
 
 Read the three rows together, because the comparison is the finding:
 
-- the invariant's two numbers are **the same number** — it is arithmetic over
+- the invariant's two numbers are **the same number**. It is arithmetic over
   the grant, so withholding the family costs it nothing
 - hybrid ML lands within 0.016 of its seen-family score, which is what
   generalisation looks like: given the aggregate feature, it learned the
   mechanism
 - a model **without** a cross-rail view reaches 0.1719 held out and still only
-  0.5625 with the family in training — one ₹4,000 leg genuinely does look like
+  0.5625 with the family in training, one ₹4,000 leg genuinely does look like
   ordinary grocery spending, and more data does not supply a missing feature
 
 > **An earlier revision of this chapter claimed `ML Holdout Recall: 0.0`.** That
@@ -267,10 +267,10 @@ test_wrong_key_fails_verification PASSED
 2. `TestFeatures` in `backend/tests/test_forseti.py` (`test_extractor_emits_the_declared_schema`, line 235).
 3. `python tasks.py pqc-test`.
 4. Because it is written as a standalone `unittest` script with custom runner hooks, rather than a pytest module.
-5. `test_ledger_concurrency.py` ships an UNSAFE check-then-act implementation and asserts it **overspends** under 60 threads — if that stops failing, the atomic test proves nothing. `test_suspension_is_enforced.py` ships a clean ₹100 payment and asserts every rung *except* `AGENT_SUSPENDED` **allows** it — otherwise an engine that rejected everything would pass.
+5. `test_ledger_concurrency.py` ships an UNSAFE check-then-act implementation and asserts it **overspends** under 60 threads, if that stops failing, the atomic test proves nothing. `test_suspension_is_enforced.py` ships a clean ₹100 payment and asserts every rung *except* `AGENT_SUSPENDED` **allows** it, otherwise an engine that rejected everything would pass.
 </details>
 
 ---
 
 ## Where to go next
-→ [LEARN_13 — Glossary](LEARN_13_GLOSSARY.md)
+→ [LEARN_13. Glossary](LEARN_13_GLOSSARY.md)

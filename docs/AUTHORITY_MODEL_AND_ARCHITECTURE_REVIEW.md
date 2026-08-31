@@ -1,13 +1,13 @@
-# FORSETI — Authority Model Upgrade & Architecture Review
+# FORSETI: Authority Model Upgrade & Architecture Review
 
 <!--historical-record-->
-> **HISTORICAL RECORD — the numbers below were true when this was written and several
+> **HISTORICAL RECORD, the numbers below were true when this was written and several
 > are now superseded.** This document is kept as a record of what was measured and
 > decided at the time, so it is deliberately NOT updated when results change.
 >
 > For current figures see [`MEASURED_NUMBERS.md`](MEASURED_NUMBERS.md), which is
 > generated from the artifacts that ship. Notably superseded here: the pre-leak-fix
-> cross-rail recalls, PR-AUC, and every DTL/graph feature-lift value — see
+> cross-rail recalls, PR-AUC, and every DTL/graph feature-lift value, see
 > [`LEARN_22_THE_LEAK.md`](LEARN_22_THE_LEAK.md) for why they changed.
 
 
@@ -26,7 +26,7 @@ Two things were requested and both are done:
    event log was clickable. Now every box on the flow diagram is a button that opens a
    panel explaining what that component is, what it can and cannot see, and its live state.
 2. **The external assessment was evaluated, largely accepted, and implemented.** The core
-   conceptual upgrade — *authority is multidimensional, not just a spend ceiling* — is now
+   conceptual upgrade, *authority is multidimensional, not just a spend ceiling*, is now
    real code with six enforced invariants, three new attack vectors, and 15 new tests.
 
 A third thing was done unprompted because the assessment demanded it: **every metric in the
@@ -42,7 +42,7 @@ The assessment made five substantive claims. Here is my verdict on each.
 | # | Claim | Verdict | Action |
 |---|---|---|---|
 | 1 | Don't present 12 AI agents as 12 independent innovations; show the hierarchy | **Correct** | Implemented (§5) |
-| 2 | Don't hide the "NOT working" section — 0% ML recall, 9% FPR make it credible | **Correct** | Kept, and made *more* prominent |
+| 2 | Don't hide the "NOT working" section, 0% ML recall, 9% FPR make it credible | **Correct** | Kept, and made *more* prominent |
 | 3 | Don't claim numbers unless reproducible from artifacts | **Correct, and we were violating it** | Full audit, 11 fixes (§6) |
 | 4 | Authority is multidimensional; a rail-restricted grant breaks the flagship attack | **Correct and the most valuable point** | Core rework (§3) |
 | 5 | Thesis should become "preserve delegated authority across every dimension" | **Correct** | Adopted (§2) |
@@ -50,7 +50,7 @@ The assessment made five substantive claims. Here is my verdict on each.
 ### Where the assessment was right in a way that mattered
 
 The sharpest observation was this: if a user says *"₹12,000, **only** through UPI"*, then
-the flagship cross-rail split attack **does not work** — and, worse, the old FORSETI could
+the flagship cross-rail split attack **does not work**, and, worse, the old FORSETI could
 not even express that grant. `DTLGlobalAuthorityState` had a `global_budget_ceiling` and an
 MCC list, and nothing else. There was no field for permitted rails, no per-transaction cap,
 and no validity window.
@@ -63,7 +63,7 @@ The assessment implies the old thesis ("payment systems don't know the total amo
 rails") was *too narrow to be interesting*. I'd put it differently, and this distinction
 matters when presenting:
 
-- The cross-rail aggregate blind spot is **real, specific, and measurable** — it is the one
+- The cross-rail aggregate blind spot is **real, specific, and measurable**. It is the one
   claim in this project with a hard number behind it (`dtl_invariant_only` catches 90.54% of
   a held-out attack family that every learned model scores at 0.0% recall).
 - The multidimensional framing is **strictly better as a thesis**, but it is *broader*, and
@@ -81,7 +81,7 @@ states this explicitly.
 **Before:** "Payment rails cannot see each other's spend, so an agent can split a purchase
 across them and exceed the user's budget."
 
-**After:** "A delegated agent may act only within the authority a human granted — and that
+**After:** "A delegated agent may act only within the authority a human granted, and that
 authority is multidimensional. Amount is one dimension of six."
 
 ```
@@ -116,7 +116,7 @@ economic_purpose: str
 ```
 
 Plus helpers: `expires_at`, `is_expired(now)`, `allows_rail(rail)`, and
-`authority_vector()` — which returns one row per dimension and is what the UI renders.
+`authority_vector()`. Which returns one row per dimension and is what the UI renders.
 
 **Back-compat is deliberate and tested:** the defaults are all-rails-permitted, no
 per-transaction cap, 7-day window. The historical ₹10,000 demo behaves exactly as before
@@ -156,15 +156,15 @@ dimensions. The response depends on *which* dimension failed:
 
 | Dimension | Response | Books money? |
 |---|---|---|
-| PURPOSE | `PARTIAL_AUTH` — clear the genuine basket, quarantine stored value | yes, the legitimate part |
-| AMOUNT | `HEADROOM_CAP` — authorise exactly the remaining headroom | yes, up to headroom |
-| PER_TX | `STEP_UP_REQUIRED` — user confirms; agent keeps transacting under the cap | **no** |
-| RAIL | `RAIL_SCOPE_BLOCK` — permitted rails stay fully usable | **no** |
-| MERCHANT | `SCOPE_QUARANTINE` — shadow ledger; in-scope merchants unaffected | **no** |
-| TIME | `RE_CONSENT_HOLD` — held pending a fresh grant | **no** |
+| PURPOSE | `PARTIAL_AUTH`. Clear the genuine basket, quarantine stored value | yes, the legitimate part |
+| AMOUNT | `HEADROOM_CAP`. Authorise exactly the remaining headroom | yes, up to headroom |
+| PER_TX | `STEP_UP_REQUIRED`, user confirms; agent keeps transacting under the cap | **no** |
+| RAIL | `RAIL_SCOPE_BLOCK`. Permitted rails stay fully usable | **no** |
+| MERCHANT | `SCOPE_QUARANTINE`, shadow ledger; in-scope merchants unaffected | **no** |
+| TIME | `RE_CONSENT_HOLD`. Held pending a fresh grant | **no** |
 
 The four scope violations consume **zero** headroom. Refusing an out-of-scope action must
-not spend the user's authority — verified by `test_rail_containment_consumes_no_headroom`.
+not spend the user's authority, verified by `test_rail_containment_consumes_no_headroom`.
 
 ### 3.4 Three new attack vectors (`app/redteam/vectors/authority_scope.py`)
 
@@ -197,7 +197,7 @@ correctly. That is the system behaving exactly as intended being displayed as a 
 
 This is easy to trigger in a demo: the arena offers a ₹12,000 quick-pick, and the cross-rail
 split objective is exactly ₹12,000. `12,000 <= 12,000` is within authority, so no invariant
-fires — correctly. A judge clicking that button would have seen "RED WINS".
+fires, correctly. A judge clicking that button would have seen "RED WINS".
 
 There are three distinct endings, now reported separately:
 
@@ -220,25 +220,25 @@ spending exactly the granted amount is not a violation.
 
 ### 3.6 API surface
 
-- `POST /api/arena/authority-scope` — set rails / per-tx cap / MCCs / window / purpose
-- `GET /api/arena/authority-vector` — the full grant, one row per dimension
-- `GET /api/arena/state` — now also returns `authority_vector` and `invariant_registry`
-- `GET /api/ai/status` — now also returns `hierarchy` (§5)
+- `POST /api/arena/authority-scope`. Set rails / per-tx cap / MCCs / window / purpose
+- `GET /api/arena/authority-vector`, the full grant, one row per dimension
+- `GET /api/arena/state`, now also returns `authority_vector` and `invariant_registry`
+- `GET /api/ai/status`, now also returns `hierarchy` (§5)
 
 ---
 
 ## 4. What changed in the frontend
 
-### 4.1 Clickable steps — the primary request
+### 4.1 Clickable steps: the primary request
 
 Every box in the Live Attack Flow is now a keyboard-accessible button
 (`AttackFlowCanvas.tsx` → `onNodeClick`). Clicking opens `NodeInspector.tsx`, a slide-over
 that shows:
 
-- **What the component is** — its role, and crucially *what it cannot see*
-- **Reads / Produces** — its inputs and outputs
-- **Live state** — rail totals, exposure vs. ceiling, model status, PQC status, active policy
-- **Recent activity at this node** — real events routed through it this session
+- **What the component is**. Its role, and crucially *what it cannot see*
+- **Reads / Produces**. Its inputs and outputs
+- **Live state**, rail totals, exposure vs. ceiling, model status, PQC status, active policy
+- **Recent activity at this node**. Real events routed through it this session
 - For the **User Grant** and **DTL** nodes: the **full six-dimension authority vector**
 
 The two inspectors are complementary and mutually exclusive:
@@ -250,7 +250,7 @@ The two inspectors are complementary and mutually exclusive:
 | Available | after an event fires | always, even before any attack |
 
 A new **USER GRANT** node was added to the canvas, because the delegation itself was
-previously invisible — the diagram started at the Red Agent, which made the grant look like
+previously invisible, the diagram started at the Red Agent, which made the grant look like
 an implicit constant rather than the thing being protected.
 
 ### 4.2 Rail-scope control
@@ -265,7 +265,7 @@ UI itself communicates that amount is one of six.
 
 ---
 
-## 5. The hierarchy — addressing "don't present 12 agents as 12 innovations"
+## 5. The hierarchy: addressing "don't present 12 agents as 12 innovations"
 
 `SYSTEM_HIERARCHY` in `app/ai/agents.py` is served by `/api/ai/status` and rendered at the
 top of the AI Studio as **"What is actually the invention"**:
@@ -310,7 +310,7 @@ explainable containment.`
 The assessment warned: *"don't claim 90.5%, 0%, 0.8882 PR-AUC to judges unless those numbers
 are genuinely produced by the referenced artifacts."*
 
-I checked every number. **Eleven were stale** — left over from an earlier pipeline run and
+I checked every number. **Eleven were stale**. Left over from an earlier pipeline run and
 never updated after `python tasks.py all` was re-executed on 2026-08-18.
 
 ### 6.1 Corrected figures
@@ -331,7 +331,7 @@ never updated after `python tasks.py all` was re-executed on 2026-08-18.
 
 Corrected in `README.md`, `docs/FEATURES.md`, `docs/HACKATHON_ALIGNMENT.md`.
 
-### 6.2 The headline claims — verified reproducible
+### 6.2 The headline claims: verified reproducible
 
 These are safe to state to judges. Each was re-read from the artifact today:
 
@@ -343,7 +343,7 @@ These are safe to state to judges. Each was re-read from the artifact today:
 | DTL feature lift | **+0.1378** | `baselines.json` → `measured_dtl_lift` | same as baselines |
 | p99 inline latency | **0.8791 ms** | `latency.json` | `python -m app.benchmark.latency --iterations 10000` |
 
-### 6.3 What is NOT claimed — read this before presenting
+### 6.3 What is NOT claimed: read this before presenting
 
 The assessment was right that the weaknesses make the project credible. They are unchanged
 and should be stated first, not defended:
@@ -352,7 +352,7 @@ and should be stated first, not defended:
    no realism claim is made.
 2. **Cross-rail holdout is n=74.** Directionally clear, not conclusive. Say "directionally".
 3. **The DTL invariant alone has 9.0% FPR.** High recall, high false positives. This is
-   *why* the cost governor exists — lead with that, don't wait to be asked.
+   *why* the cost governor exists, lead with that, don't wait to be asked.
 4. **The new dimensions (RAIL / PER_TX / TIME) have no measured detection rate.** They are
    deterministic predicates with unit tests, not statistical results. There is no dataset
    column for "was this rail permitted", so the offline probe in `baselines.py` still scores
@@ -367,10 +367,10 @@ and should be stated first, not defended:
 
 | Considered | Decision | Reason |
 |---|---|---|
-| Add rail/time features to the 29-feature ML schema | **No** | Would invalidate every published metric and require re-running and re-verifying the whole pipeline. The new dimensions are deterministic by design — they gain nothing from being learned. |
-| Add INV_04/05/06 to the offline `baselines.py` probe | **No** | The synthetic dataset has no column for permitted rails or grant expiry. Scoring them would require fabricating ground truth — exactly the dishonesty being guarded against. |
+| Add rail/time features to the 29-feature ML schema | **No** | Would invalidate every published metric and require re-running and re-verifying the whole pipeline. The new dimensions are deterministic by design. They gain nothing from being learned. |
+| Add INV_04/05/06 to the offline `baselines.py` probe | **No** | The synthetic dataset has no column for permitted rails or grant expiry. Scoring them would require fabricating ground truth. Exactly the dishonesty being guarded against. |
 | Rewrite the flagship demo around rail scope | **No** | Cross-rail split remains the flagship: it is the one claim with a measured number. The new vectors are the *breadth* argument, not the evidence. |
-| Inflate the "12 AI agents" count | **No** | The assessment's point stands — the count is not the achievement. |
+| Inflate the "12 AI agents" count | **No** | The assessment's point stands, the count is not the achievement. |
 | Bump the taxonomy from 52 to a rounder number | **No** | Added exactly the 3 vectors implemented (53/54/55), all marked `SIMULATED`. The 46 research-only vectors are unchanged and still labelled as such. |
 
 ---
@@ -447,18 +447,18 @@ AUTHORITY_MODEL_AND_ARCHITECTURE_REVIEW.md       this document
 ## 10. The one-paragraph version, for a judge
 
 > FORSETI protects delegated authority, not a spending limit. When a user tells an AI agent
-> *"₹12,000 for groceries, UPI only, this week"*, that grant has six dimensions — amount,
-> per-transaction size, rail, merchant category, economic purpose, and validity window — and
+> *"₹12,000 for groceries, UPI only, this week"*, that grant has six dimensions. Amount,
+> per-transaction size, rail, merchant category, economic purpose, and validity window, and
 > an autonomous agent can violate any of them without spending a rupee over budget. Every
 > payment rail enforces only its own local limit and cannot see the others, let alone the
 > non-monetary terms of the grant. FORSETI's Delegation-Trust Ledger is the one component
 > that evaluates all six deterministically, which is why it catches 90.54% of a cross-rail
-> attack family that every learned model in our benchmark scores at 0.0% recall — and why it
+> attack family that every learned model in our benchmark scores at 0.0% recall, and why it
 > answers a violation with proportionate containment rather than locking the customer out.
 
 ---
 
-## 11. Second hardening pass — bugs found by systematic testing (2026-08-20)
+## 11. Second hardening pass: bugs found by systematic testing (2026-08-20)
 
 After the authority-model work landed, every endpoint, every attack vector and every
 page was exercised deliberately rather than incidentally. That surfaced five defects,
@@ -476,7 +476,7 @@ AttributeError: 'list' object has no attribute 'amount'
 ```
 
 Anyone clicking **Select all** in the arena hit it immediately. Fixed by normalising in
-one place — the selector now accepts either shape and validates what it produced, so the
+one place, the selector now accepts either shape and validates what it produced, so the
 difference between a single-transaction vector and a burst vector cannot leak out again.
 
 ### 11.2 Attack profiles contaminated every later round
@@ -490,7 +490,7 @@ force afterwards. Running the full campaign therefore reported:
 | Intent Laundering | `INV_05_PER_TX_CAP_EXCEEDED` | `INV_02_SEMANTIC_INTENT_DRIFT` |
 | Scope Creep | `INV_05_PER_TX_CAP_EXCEEDED` | `INV_03_UNAUTHORIZED_MCC` |
 
-Two vectors were demonstrating the wrong invariant entirely — precisely the claim a judge
+Two vectors were demonstrating the wrong invariant entirely. Precisely the claim a judge
 would be checking. The orchestrator now tracks the **operator's** grant separately from a
 vector's temporary profile and restores it before any round that brings no profile of its
 own. Exposure is deliberately preserved, so a multi-vector campaign still depletes one
@@ -508,7 +508,7 @@ resetting it between each candidate ceiling. One click wiped:
 
 - the operator's rail scope and per-transaction cap
 - the entire event log
-- `last_round` — so Incident Report, Policy Advisor and Customer Notice all began
+- `last_round`, so Incident Report, Policy Advisor and Customer Notice all began
   answering *"no round has been executed yet"*
 
 It also wrote four junk rounds into the replayable recordings list each time.
@@ -516,12 +516,12 @@ It also wrote four junk rounds into the replayable recordings list each time.
 A what-if is an observation and must not mutate what the operator is watching.
 `orchestrator.sandbox()` now returns an isolated clone that shares only the stateless
 expensive parts (the loaded model, the PQC keys) and gets its own ledger, simulator,
-feedback memory and recorder — the latter writing to `artifacts/events/_sandbox/`, which
+feedback memory and recorder, the latter writing to `artifacts/events/_sandbox/`, which
 the recordings listing ignores by construction.
 
 ### 11.4 Recordings listing re-read every file on every request
 
-`list_recordings()` opened and line-counted **every** recording ever made, on each poll —
+`list_recordings()` opened and line-counted **every** recording ever made, on each poll,
 229 files by this point, for a panel that shows the newest handful. Now bounded
 (default 40) with the slice applied to the file list *before* any file is opened.
 
@@ -533,12 +533,12 @@ round's actual `RAIL_APPROVED` events.
 
 ### 11.6 What was added for legibility, not decoration
 
-- **Verdict banner** (`components/VerdictBanner.tsx`) — after each round, states what every
+- **Verdict banner** (`components/VerdictBanner.tsx`). After each round, states what every
   other control in the stack saw versus what FORSETI concluded. On a scope violation it
   reads: *"The agent's entire ₹10,000 objective fitted inside the ₹12,000 grant, every rail
-  approved, and the model saw nothing — FORSETI blocked it anyway."* Every figure is read
+  approved, and the model saw nothing. FORSETI blocked it anyway."* Every figure is read
   from the event stream; nothing is asserted that the events do not contain.
-- **Authority-dimension card on the Overview** — the six dimensions of the live grant,
+- **Authority-dimension card on the Overview**, the six dimensions of the live grant,
   rendered from the backend's own invariant registry so it cannot drift from what the
   engine enforces.
 
@@ -553,5 +553,5 @@ campaign:  9/9 vectors execute, 0 server errors, each hits its own invariant
 ```
 
 Regression tests were added for every defect above, including one that asserts every
-strategy the orchestrator can run also has an adaptive-planner profile — the class of
+strategy the orchestrator can run also has an adaptive-planner profile, the class of
 drift that let three vectors ship broken in the first place.

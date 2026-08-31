@@ -1,7 +1,7 @@
 # FINAL_CLAIMS
 
 Claim-by-claim ledger: what FORSETI is safe to say, where the number comes from, and the exact
-wording to use. Current artifacts win over prior documentation — see
+wording to use. Current artifacts win over prior documentation, see
 `docs/FINAL_IMPLEMENTATION_AUDIT.md` for the full module-by-module audit this ledger summarizes.
 
 ---
@@ -10,19 +10,19 @@ wording to use. Current artifacts win over prior documentation — see
 
 **CLAIM:** "FORSETI protects delegated authority across seven dimensions."
 **SOURCE:** `backend/app/models/state.py:30-44` (`AuthorityDimension` enum), `invariant_engine.py` (7 `INV_` checks).
-**STATUS:** MEASURED / IMPLEMENTED — deterministic, not a statistical claim.
-**SAFE WORDING:** "FORSETI protects multidimensional delegated authority — amount, per-transaction size, rail, merchant, beneficiary, purpose, and time — not a single spend ceiling."
+**STATUS:** MEASURED / IMPLEMENTED. Deterministic, not a statistical claim.
+**SAFE WORDING:** "FORSETI protects multidimensional delegated authority, amount, per-transaction size, rail, merchant, beneficiary, purpose, and time, not a single spend ceiling."
 
 ### Attack taxonomy
 
 **CLAIM:** "63 researched attack vectors, 17 deeply implemented and executable."
 **SOURCE:** `docs/taxonomy.md` (63 rows), `backend/app/taxonomy.py::IMPLEMENTED` (17 entries), confirmed via `TAXONOMY` parse (`len(TAXONOMY) == 63`, `implemented_count == 17`, both pinned by `tests/test_forseti.py::TestTaxonomy`).
 **STATUS:** IMPLEMENTED.
-**SAFE WORDING:** "17 executable vectors spanning the seven authority dimensions, agent-reasoning integrity and post-authorization settlement — all 17 in thesis scope. The catalogue holds 63 researched rows for landscape completeness; **41 are about delegated agent authority and 22 are not**, and the API says which is which (`in_thesis_scope`)."
+**SAFE WORDING:** "17 executable vectors spanning the seven authority dimensions, agent-reasoning integrity and post-authorization settlement, all 17 in thesis scope. The catalogue holds 63 researched rows for landscape completeness; **41 are about delegated agent authority and 22 are not**, and the API says which is which (`in_thesis_scope`)."
 
-**LEAD WITH 17, NOT 63.** A judge who samples three of the 46 research rows at random will find off-topic ones (smart-contract re-entrancy, payroll redirection, Android 2FA theft) — they are real, cited threats that are not this project's subject. Severity and agentic-relevance on research rows are **keyword-inferred from our own description text**, exposed as `label_provenance`; never present them as researched ratings.
+**LEAD WITH 17, NOT 63.** A judge who samples three of the 46 research rows at random will find off-topic ones (smart-contract re-entrancy, payroll redirection, Android 2FA theft). They are real, cited threats that are not this project's subject. Severity and agentic-relevance on research rows are **keyword-inferred from our own description text**, exposed as `label_provenance`; never present them as researched ratings.
 
-### ML detection — headline metrics
+### ML detection: headline metrics
 
 **CLAIM:** "XGBoost PR-AUC = 0.9209 (temporal test, attack-family holdout), ROC-AUC = 0.9766, 37 features across 6 groups."
 **SOURCE:** `artifacts/evaluation/metrics.json` (`experiment_id: EXP-20260821-165229`).
@@ -34,7 +34,7 @@ wording to use. Current artifacts win over prior documentation — see
 **CLAIM:** "Models without a cross-rail view score 0.172 recall on held-out cross-rail splitting and only ~0.5 even when trained on it; a model given the DTL's aggregate features reaches 0.828; the deterministic invariant reaches 0.844 with zero training."
 **SOURCE:** `artifacts/evaluation/baselines.json` (`headline_finding`, both conditions).
 **STATUS:** MEASURED.
-**SAFE WORDING:** Show BOTH columns. The finding is that the information lives in the aggregate, not that ML fundamentally fails — an earlier revision claimed the latter and its own artifact refuted it. See `docs/LEARN_22_THE_LEAK.md`.
+**SAFE WORDING:** Show BOTH columns. The finding is that the information lives in the aggregate, not that ML fundamentally fails, an earlier revision claimed the latter and its own artifact refuted it. See `docs/LEARN_22_THE_LEAK.md`.
 
 ### Ablation (post-graph-retrain)
 
@@ -60,7 +60,7 @@ wording to use. Current artifacts win over prior documentation — see
 ### Public anchor fidelity
 
 **CLAIM:** none currently makeable as a positive result.
-**SOURCE:** `artifacts/fidelity/fidelity_report.json` — `"overall_status": "NOT RUN / DATASET UNAVAILABLE"`, `anchor_datasets_loaded: []`.
+**SOURCE:** `artifacts/fidelity/fidelity_report.json`, `"overall_status": "NOT RUN / DATASET UNAVAILABLE"`, `anchor_datasets_loaded: []`.
 **STATUS:** NOT RUN / DATASET UNAVAILABLE. Neither PaySim nor the ULB creditcard CSV is present in `data/anchors/`; both require accepting Kaggle's terms under a user account, which this session cannot do on the user's behalf.
 **SAFE WORDING:** "FORSETI includes a reproducible fidelity harness for public anchor datasets (KS test, Jensen-Shannon divergence, correlation distance, discriminator AUC, TSTR)." **NEVER** "FORSETI was statistically validated against PaySim/ULB" unless `fidelity_report.json` shows `anchor_datasets_loaded` non-empty and real metrics, not the current self-consistency-only figures.
 
@@ -69,11 +69,11 @@ wording to use. Current artifacts win over prior documentation — see
 **CLAIM:** "Genuine NIST FIPS 204 ML-DSA-44 signatures, verified live."
 **SOURCE:** `backend/app/crypto/pqc_provider.py`; live-confirmed this session via `/api/health` (`pqc_backend: dilithium-py`) and a live arena round showing `ML-DSA-44 VERIFIED` after `create_signed_snapshot` → `run_tamper_test` (4/4 cases pass).
 **STATUS:** MEASURED / IMPLEMENTED, genuinely verified (not merely present as a UI label).
-**SAFE WORDING:** "FORSETI demonstrates post-quantum ML-DSA-44 signatures for tamper-evident delegation/audit records." **NEVER** "FORSETI makes payments quantum-safe" — this is an audit-signing layer over the event log, not a property of any payment rail.
+**SAFE WORDING:** "FORSETI demonstrates post-quantum ML-DSA-44 signatures for tamper-evident delegation/audit records." **NEVER** "FORSETI makes payments quantum-safe". This is an audit-signing layer over the event log, not a property of any payment rail.
 
-**KEY PROVENANCE — state this proactively.** The signing key is generated randomly per process, so a copy of this repository does **not** hold the key of a running instance. An earlier revision derived it from a seed hardcoded in the source, which meant anyone with the repo could forge any snapshot. It is still not HSM-backed and the key lives in process memory, so the honest claim is **tamper-evident against accidental or downstream modification, not against an adversary with host access.** `provider_status()` returns `hsm_backed: false` and a `security_posture` string saying exactly this. Set `FORSETI_PQC_SEED` only when byte-reproducibility is deliberately wanted.
+**KEY PROVENANCE, state this proactively.** The signing key is generated randomly per process, so a copy of this repository does **not** hold the key of a running instance. An earlier revision derived it from a seed hardcoded in the source, which meant anyone with the repo could forge any snapshot. It is still not HSM-backed and the key lives in process memory, so the honest claim is **tamper-evident against accidental or downstream modification, not against an adversary with host access.** `provider_status()` returns `hsm_backed: false` and a `security_posture` string saying exactly this. Set `FORSETI_PQC_SEED` only when byte-reproducibility is deliberately wanted.
 
-**WHAT THE SIGNATURE COVERS:** authority identity, the ceiling, the four-bucket exposure breakdown, active policy, and the event-log hash-chain head. Invariant proofs, transactions and containment decisions are covered **transitively** through that head — say "transitively", not "we sign everything".
+**WHAT THE SIGNATURE COVERS:** authority identity, the ceiling, the four-bucket exposure breakdown, active policy, and the event-log hash-chain head. Invariant proofs, transactions and containment decisions are covered **transitively** through that head, say "transitively", not "we sign everything".
 
 ### AI advisory layer
 
@@ -94,23 +94,23 @@ wording to use. Current artifacts win over prior documentation — see
 **CLAIM:** a synthetic scoped-token credential model demonstrating token-scope enforcement chained to live delegated authority.
 **SOURCE:** `backend/app/tokenization/`; `tests/test_tokenization.py` (20/20 passing), including a direct test that a token cannot outlive a delegation narrowed after issuance.
 **STATUS:** IMPLEMENTED, new this session.
-**SAFE WORDING:** "A synthetic scoped-token model that demonstrates how tokenized payment credentials can inherit and enforce delegated authority — not an implementation of Mastercard MDES or any real network token vault." Token store is in-memory/process-lifetime — say so if asked about persistence.
+**SAFE WORDING:** "A synthetic scoped-token model that demonstrates how tokenized payment credentials can inherit and enforce delegated authority, not an implementation of Mastercard MDES or any real network token vault." Token store is in-memory/process-lifetime, say so if asked about persistence.
 
 ### Settlement Conflict / Reconciliation Drift
 
 **CLAIM:** two new attack vectors close the last two unmapped Kill Chain stages (10, 11), via a third parallel deterministic mechanism distinct from DTL invariants and Deception Lab.
-**SOURCE:** `backend/app/settlement/reconciliation.py`; `tests/test_settlement_reconciliation.py` (19/19 passing, including proof that no authority-dimension invariant fires on either vector — the point of the demonstration).
+**SOURCE:** `backend/app/settlement/reconciliation.py`; `tests/test_settlement_reconciliation.py` (19/19 passing, including proof that no authority-dimension invariant fires on either vector, the point of the demonstration).
 **STATUS:** IMPLEMENTED, new this session.
-**SAFE WORDING:** "FORSETI models two synthetic post-authorization lifecycle failures — cross-rail settlement conflict and same-rail reconciliation drift — as safe, bounded synthetic scenarios. This is not a model of real banking clearing/settlement exploitation."
+**SAFE WORDING:** "FORSETI models two synthetic post-authorization lifecycle failures, cross-rail settlement conflict and same-rail reconciliation drift, as safe, bounded synthetic scenarios. This is not a model of real banking clearing/settlement exploitation."
 
-**CONCEDE THE PRECEDENT FIRST.** Duplicate-settlement detection by shared identifier **is idempotency**, and Stripe/Adyen/Square all ship it. Do not present it as novel. What is not standard: the key is a business-level *obligation* rather than a client-supplied request id (a different key makes the same transaction look new — the documented weakness of idempotency keys), the check is **cross-rail** where no single processor sees both legs, and containment releases *delegated authority*, which an idempotency key has no concept of. Not modelled: partial captures, late presentment, representments, chargebacks, multi-currency, cut-off windows, ARN/RRN matching. Call it "reconciliation checks", not an engine.
+**CONCEDE THE PRECEDENT FIRST.** Duplicate-settlement detection by shared identifier **is idempotency**, and Stripe/Adyen/Square all ship it. Do not present it as novel. What is not standard: the key is a business-level *obligation* rather than a client-supplied request id (a different key makes the same transaction look new, the documented weakness of idempotency keys), the check is **cross-rail** where no single processor sees both legs, and containment releases *delegated authority*, which an idempotency key has no concept of. Not modelled: partial captures, late presentment, representments, chargebacks, multi-currency, cut-off windows, ARN/RRN matching. Call it "reconciliation checks", not an engine.
 
 ### Unified Risk Engine
 
 **CLAIM:** an explicit, auditable aggregation of independently-computed risk signals, with deterministic override.
-**SOURCE:** `backend/app/risk_engine/risk.py` — `weighting: "equal-weighted mean - no labelled severity dataset exists to fit weights against"`.
+**SOURCE:** `backend/app/risk_engine/risk.py`, `weighting: "equal-weighted mean - no labelled severity dataset exists to fit weights against"`.
 **STATUS:** IMPLEMENTED, correctly framed in code already; no change made.
-**SAFE WORDING:** "Unified risk aggregation combines independently interpretable risk components with deterministic authority overrides." **NEVER** "AI learned the optimal risk weighting" — there is no fitted model here by design.
+**SAFE WORDING:** "Unified risk aggregation combines independently interpretable risk components with deterministic authority overrides." **NEVER** "AI learned the optimal risk weighting". There is no fitted model here by design.
 
 ### Test suite
 
@@ -120,7 +120,7 @@ wording to use. Current artifacts win over prior documentation — see
 Browser: `cd frontend && npm run e2e` → 72 responsive checks (18 routes × 4 viewports)
 and 44 functional checks, 0 console errors.
 **STATUS:** MEASURED, verified live. The count is now **gated**: `check_claims.py`
-fails if any document quotes a backend test count that is not the collected one —
+fails if any document quotes a backend test count that is not the collected one,
 added after four documents were found still claiming 217.
 **SAFE WORDING:** State both numbers and say what the browser suite is *for*: it
 covers what pytest structurally cannot see, and it found four real defects on its
@@ -129,8 +129,8 @@ enum and was missing its top rung.
 
 ### Production limitations (state explicitly when asked)
 
-1. Ledger and token-store state are in-memory, process-lifetime — not a persistent/ACID store.
-2. The PQC signing key is **randomly generated per process** and held in memory — no key ships in the repository, and none is HSM-protected. Status reports `hsm_backed: false` with explicit provenance. The property is tamper-EVIDENCE against accidental or downstream modification, not resistance to an adversary with host access.
+1. Ledger and token-store state are in-memory, process-lifetime, not a persistent/ACID store.
+2. The PQC signing key is **randomly generated per process** and held in memory, no key ships in the repository, and none is HSM-protected. Status reports `hsm_backed: false` with explicit provenance. The property is tamper-EVIDENCE against accidental or downstream modification, not resistance to an adversary with host access.
 3. ML performance is measured against synthetic adversarial behaviour, not live bank fraud streams.
 4. Public anchor fidelity is unexecuted pending licensed dataset availability.
 5. Graph Sentinel is a training-time construct; there is no live per-round cross-authority graph.

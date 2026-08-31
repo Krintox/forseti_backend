@@ -1,4 +1,4 @@
-# LEARN_00 — Start Here
+# LEARN_00: Start Here
 
 > **Prerequisites:** None. This is the entry point to the entire FORSETI curriculum.  
 > **You will be able to:**
@@ -19,7 +19,7 @@ Imagine you give your smart toy robot ₹100 of pocket money to buy school suppl
 An autonomous household procurement agent is granted a monthly budget of ₹10,000 to purchase groceries. It has access to a tokenized credit card, a UPI-Circle delegation, and an agentic web mandate. An adversary exploits the agent to make three concurrent ₹4,000 purchases across the three distinct rails. Each rail approves its leg because ₹4,000 is under the individual rail cap. Without cross-rail state, the user suffers an unchecked ₹2,000 budget breach (total spend ₹12,000). FORSETI provides the cross-rail delegation-trust ledger that catches and stops this cross-rail split.
 
 🎓 **Properly**  
-FORSETI is a hybrid security framework for autonomous agentic commerce. It bridges the structural blind spot of modern payment architectures where authorization is siloed per [payment rail](LEARN_13_GLOSSARY.md#payment-rail). By introducing a **[Delegation-Trust Ledger (DTL)](LEARN_13_GLOSSARY.md#delegation-trust-ledger-dtl)** (`backend/app/dtl/ledger.py:7`), FORSETI deterministically tracks multidimensional authority across seven core dimensions ([AMOUNT](LEARN_13_GLOSSARY.md#authority-dimensions), [PER_TX](LEARN_13_GLOSSARY.md#authority-dimensions), [RAIL](LEARN_13_GLOSSARY.md#authority-dimensions), [MERCHANT](LEARN_13_GLOSSARY.md#authority-dimensions), [PURPOSE](LEARN_13_GLOSSARY.md#authority-dimensions), [TIME](LEARN_13_GLOSSARY.md#authority-dimensions), and [BENEFICIARY](LEARN_16_INTENT_FIREWALL.md) — the seventh dimension added by the Agentic Payment Security Runtime expansion, LEARN_16) and couples deterministic invariant enforcement with an explainable Gradient-Boosted Decision Tree (GBDT) machine learning detector (`backend/app/detector/model.py:54`), post-quantum cryptographic auditing (`backend/app/crypto/pqc_provider.py:2`), and — since the expansion — an Agent Intent Firewall, Deception Lab, Kill Chain scoring, Graph Sentinel ML features, and an Adaptive Immune escalation system (LEARN_16–20).
+FORSETI is a hybrid security framework for autonomous agentic commerce. It bridges the structural blind spot of modern payment architectures where authorization is siloed per [payment rail](LEARN_13_GLOSSARY.md#payment-rail). By introducing a **[Delegation-Trust Ledger (DTL)](LEARN_13_GLOSSARY.md#delegation-trust-ledger-dtl)** (`backend/app/dtl/ledger.py:7`), FORSETI deterministically tracks multidimensional authority across seven core dimensions ([AMOUNT](LEARN_13_GLOSSARY.md#authority-dimensions), [PER_TX](LEARN_13_GLOSSARY.md#authority-dimensions), [RAIL](LEARN_13_GLOSSARY.md#authority-dimensions), [MERCHANT](LEARN_13_GLOSSARY.md#authority-dimensions), [PURPOSE](LEARN_13_GLOSSARY.md#authority-dimensions), [TIME](LEARN_13_GLOSSARY.md#authority-dimensions), and [BENEFICIARY](LEARN_16_INTENT_FIREWALL.md), the seventh dimension added by the Agentic Payment Security Runtime expansion, LEARN_16) and couples deterministic invariant enforcement with an explainable Gradient-Boosted Decision Tree (GBDT) machine learning detector (`backend/app/detector/model.py:54`), post-quantum cryptographic auditing (`backend/app/crypto/pqc_provider.py:2`), and. Since the expansion, an Agent Intent Firewall, Deception Lab, Kill Chain scoring, Graph Sentinel ML features, and an Adaptive Immune escalation system (LEARN_16–20).
 
 ```mermaid
 flowchart TD
@@ -54,9 +54,9 @@ flowchart TD
 
 > "When humans delegate financial authority to AI agents, existing payment rails face an architectural blind spot: **each rail only evaluates its own transactions in isolation**. An agent with a ₹10,000 grocery allowance can execute ₹4,000 on a credit card, ₹4,000 on UPI, and ₹4,000 on an agentic mandate. Every rail approves locally, but the human's total budget is breached by ₹2,000. 
 > 
-> FORSETI solves this by introducing the **Delegation-Trust Ledger (DTL)**. It evaluates every transaction against **seven** deterministic invariants — amount, per-transaction limit, permitted rails, merchant category, beneficiary, semantic basket intent, and validity window — plus an eighth check for a suspended mandate.
+> FORSETI solves this by introducing the **Delegation-Trust Ledger (DTL)**. It evaluates every transaction against **seven** deterministic invariants, amount, per-transaction limit, permitted rails, merchant category, beneficiary, semantic basket intent, and validity window, plus an eighth check for a suspended mandate.
 >
-> Here is the measured result, and the interesting part is the comparison rather than any one number. With the cross-rail attack family **withheld from training**, a model that cannot see across rails reaches **0.172** recall on it. Give the same model DTL aggregate features and it reaches **0.828**. The deterministic invariant reaches **0.844** — and **0.844 again** with the family in training, because it is arithmetic over the grant and has no fitted parameter that training data could move. That equality is an identity, not a lucky run (`artifacts/evaluation/baselines.json`).
+> Here is the measured result, and the interesting part is the comparison rather than any one number. With the cross-rail attack family **withheld from training**, a model that cannot see across rails reaches **0.172** recall on it. Give the same model DTL aggregate features and it reaches **0.828**. The deterministic invariant reaches **0.844**, and **0.844 again** with the family in training, because it is arithmetic over the grant and has no fitted parameter that training data could move. That equality is an identity, not a lucky run (`artifacts/evaluation/baselines.json`).
 >
 > We do not claim the classifier generalises: 0.828 against 0.844 is inside the 95% interval at n=64, and we say so rather than round it up. Paired with a calibrated GBDT, an adversarial cost governor, a synthetic scoped-token lifecycle, an advisory 12-agent AI layer, and NIST FIPS 204 post-quantum audit signatures, FORSETI is a research prototype for keeping delegated authority enforceable across rails."
 
@@ -182,4 +182,4 @@ Every fact in this course is held to strict provenance standards:
 ---
 
 ## Where to go next
-→ [LEARN_01 — What and Why](LEARN_01_WHAT_AND_WHY.md)
+→ [LEARN_01. What and Why](LEARN_01_WHAT_AND_WHY.md)

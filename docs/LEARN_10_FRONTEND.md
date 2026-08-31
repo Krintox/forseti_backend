@@ -1,4 +1,4 @@
-# LEARN_10 — The Frontend Architecture & Dashboard
+# LEARN_10: The Frontend Architecture & Dashboard
 
 > **Prerequisites:** [LEARN_02](LEARN_02_TECH_STACK.md), [LEARN_03](LEARN_03_MAP_OF_THE_CODEBASE.md), [LEARN_07](LEARN_07_ARENA_AND_EVENTS.md)  
 > **You will be able to:**
@@ -96,13 +96,13 @@ flowchart TD
 1. **`AttackFlowCanvas.tsx` (357 lines):**  
    Renders an SVG graph of 11 fixed system nodes (Human Principal, Agent, Card Rail, UPI Rail, AP2 Rail, DTL Core, Invariant Engine, Cost Governor, ML Detector, SHAP Engine, PQC Signer). When an event occurs, `framer-motion` animates a glowing pulse along the active edge.
 2. **`EventInspector.tsx`:**  
-   Clicking any event in the live log opens this modal, which calls the AI Event Explainer (`/api/ai/event/explain`) or renders a deterministic diagnostic breakdown. `EventNumbers` (the raw-figures panel inside it) was extended to surface the Agentic Security Runtime expansion's new payload fields — drift score, deception detection type, escalation `violation_count`/`active_policy` — rather than building bespoke per-event-type sub-components.
+   Clicking any event in the live log opens this modal, which calls the AI Event Explainer (`/api/ai/event/explain`) or renders a deterministic diagnostic breakdown. `EventNumbers` (the raw-figures panel inside it) was extended to surface the Agentic Security Runtime expansion's new payload fields, drift score, deception detection type, escalation `violation_count`/`active_policy`, rather than building bespoke per-event-type sub-components.
 3. **`NodeInspector.tsx`:**  
    Clicking any node on the SVG canvas explains the component's exact role, its architectural blind spots, and its current live state.
 
 ### New in the Agentic Security Runtime Expansion
 
-The `/arena` page gained **three new cards**, all sourced entirely from `lastRound` (the round result the backend already returns from `POST /api/arena/round` and `/campaign`) — **zero extra API calls**, since `firewall_verdicts`, `deception_verdicts`, and `kill_chain` are already attached to every round result server-side (LEARN_16, LEARN_17, LEARN_18):
+The `/arena` page gained **three new cards**, all sourced entirely from `lastRound` (the round result the backend already returns from `POST /api/arena/round` and `/campaign`), **zero extra API calls**, since `firewall_verdicts`, `deception_verdicts`, and `kill_chain` are already attached to every round result server-side (LEARN_16, LEARN_17, LEARN_18):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -118,11 +118,11 @@ The `/arena` page gained **three new cards**, all sourced entirely from `lastRou
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-`VerdictBanner.tsx` gained a fourth "Unified risk" fact (LEARN_20), and `ArenaControls.tsx` gained an **Escalation Demo** button — runs `RAIL_SCOPE_VIOLATION` ×3 via the new `runBackendCampaign()` action in `ArenaProvider.tsx` (which calls `POST /api/arena/campaign`), distinct from the pre-existing client-side multi-VECTOR campaign loop already in the same file (which can only run each strategy once, and so cannot exercise the Blue escalation ladder on its own — see LEARN_20).
+`VerdictBanner.tsx` gained a fourth "Unified risk" fact (LEARN_20), and `ArenaControls.tsx` gained an **Escalation Demo** button, runs `RAIL_SCOPE_VIOLATION` ×3 via the new `runBackendCampaign()` action in `ArenaProvider.tsx` (which calls `POST /api/arena/campaign`), distinct from the pre-existing client-side multi-VECTOR campaign loop already in the same file (which can only run each strategy once, and so cannot exercise the Blue escalation ladder on its own, see LEARN_20).
 
-### §6. The Force-Directed Graph Sentinel Canvas — Deliberately Descoped
+### §6. The Force-Directed Graph Sentinel Canvas: Deliberately Descoped
 
-Some design documents describe a live, force-directed visualization of Graph Sentinel's entity graph. This was **not built**, for a reason worth stating rather than silently omitting: Graph Sentinel's graph (LEARN_19) is a **training-time construct**, built once across the synthetic dataset-generation run — there is no live, per-round graph for a force-directed canvas to animate. Building one would mean either fabricating a fake live graph or visualizing the static training-time graph disconnected from the round the judge is actually watching. The Kill Chain per-round scorecard above is what the live system can honestly show instead.
+Some design documents describe a live, force-directed visualization of Graph Sentinel's entity graph. This was **not built**, for a reason worth stating rather than silently omitting: Graph Sentinel's graph (LEARN_19) is a **training-time construct**, built once across the synthetic dataset-generation run. There is no live, per-round graph for a force-directed canvas to animate. Building one would mean either fabricating a fake live graph or visualizing the static training-time graph disconnected from the round the judge is actually watching. The Kill Chain per-round scorecard above is what the live system can honestly show instead.
 
 ---
 
@@ -216,8 +216,8 @@ Judges walk a hall with a phone. A dashboard that overflows horizontally on a
 🎓 **Properly**
 
 The layout was built desktop-first and it showed. `Shell.tsx` rendered the
-sidebar as a fixed `w-60 shrink-0` at *every* width — 240 px of a 390 px viewport
-before the content got a say — so `/`, `/arena` and `/ledger` all pushed past the
+sidebar as a fixed `w-60 shrink-0` at *every* width, 240 px of a 390 px viewport
+before the content got a say, so `/`, `/arena` and `/ledger` all pushed past the
 right edge. The fix is a **collapsing rail**, not a hamburger menu:
 
 ```tsx
@@ -235,7 +235,7 @@ Three rules carry the rest of the responsiveness, and they are worth stating
 because they are what the suite actually enforces:
 
 1. **Fixed widths get breakpoints.** The Explainability SHAP rows reserved
-   `w-56` for the feature name and `w-20` for the value — 304 px of unyielding
+   `w-56` for the feature name and `w-20` for the value, 304 px of unyielding
    columns. They are now `w-24 sm:w-40 lg:w-56` and `w-14 sm:w-20`.
 2. **Long identifiers wrap, they do not push.** Any `<dd>` holding an id like
    `auth_household_grocery_2026` carries `min-w-0 break-all`. Without `min-w-0`
@@ -244,7 +244,7 @@ because they are what the suite actually enforces:
 3. **Wide content scrolls inside its own box.** `AttackFlowCanvas` has a genuine
    intrinsic width (`min-w-[900px]`), so it lives in an `overflow-x-auto`
    container. Scrolling *inside a box* is a design decision; scrolling the whole
-   document is a defect — and the test suite draws exactly that line, excluding
+   document is a defect, and the test suite draws exactly that line, excluding
    anything inside a deliberate `overflow-x: auto` ancestor.
 
 ### The suite
@@ -256,8 +256,8 @@ npm run e2e:functional   # 44 checks against a live backend
 npm run e2e              # both
 ```
 
-`e2e/responsive.mjs` asserts one property per route per width —
-`documentElement.scrollWidth === clientWidth` — plus zero console errors. When it
+`e2e/responsive.mjs` asserts one property per route per width,
+`documentElement.scrollWidth === clientWidth`, plus zero console errors. When it
 fails it prints the offending element, its computed right edge and the first 48
 characters of its text, so the fix is not a hunt.
 
@@ -266,7 +266,7 @@ characters of its text, so the fix is not a hunt.
 is the most valuable: **the literal strings `undefined`, `NaN` and
 `[object Object]` must not appear in the DOM on any route.** A backend field
 renamed in a refactor still typechecks anywhere the frontend reads it off an
-`any` — and then renders as the word "undefined" in front of whoever is watching.
+`any`, and then renders as the word "undefined" in front of whoever is watching.
 That check is what caught the `time_to_detection_ms` →
 `wall_clock_to_detection_ms_presentation_paced` rename before a judge could.
 
@@ -276,7 +276,7 @@ That check is what caught the `time_to_detection_ms` →
 |---|---|
 | Sidebar fixed at `w-60` on a 390 px viewport | It is a CSS property. No Python test has a viewport. |
 | SHAP rows reserving 304 px of fixed columns | Same. |
-| **Policy Center's ladder had drifted from the `DefensePolicy` enum, missing `AGENT_SUSPENDED`** | The backend was correct and the component rendered its props faithfully. The bug lived in the *gap between them* — a hand-written second copy — which neither side can see alone. |
+| **Policy Center's ladder had drifted from the `DefensePolicy` enum, missing `AGENT_SUSPENDED`** | The backend was correct and the component rendered its props faithfully. The bug lived in the *gap between them*, a hand-written second copy, which neither side can see alone. |
 | `is_running` latched on the server after a client disconnected, disabling every control | The happy path was tested and passed. It took a real browser being closed mid-campaign to exercise the failure path. |
 
 The third and fourth are the reason this suite exists at all. Both are
@@ -295,7 +295,7 @@ was wrong.
 <details>
 <summary>Answers</summary>
 
-1. Exactly 18 navigation entries grouped into Command, Operations, Science, and Governance (`frontend/app/components/Shell.tsx`). Every entry resolves to a real page — the browser suite fails if any of them renders under 200 characters of text.
+1. Exactly 18 navigation entries grouped into Command, Operations, Science, and Governance (`frontend/app/components/Shell.tsx`). Every entry resolves to a real page, the browser suite fails if any of them renders under 200 characters of text.
 2. By maintaining a single centralized WebSocket connection and deriving all component states from a shared reactive event buffer.
 3. The Detection Lab page (`/detection`, `frontend/app/detection/page.tsx`).
 4. The `NotRun` component (`frontend/app/components/ui.tsx:75`).
@@ -305,4 +305,4 @@ was wrong.
 ---
 
 ## Where to go next
-→ [LEARN_11 — Pipelines and Artifacts](LEARN_11_PIPELINES_AND_ARTIFACTS.md)
+→ [LEARN_11. Pipelines and Artifacts](LEARN_11_PIPELINES_AND_ARTIFACTS.md)

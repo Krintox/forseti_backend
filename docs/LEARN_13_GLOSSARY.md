@@ -1,4 +1,4 @@
-# LEARN_13 — Comprehensive Domain Glossary
+# LEARN_13: Comprehensive Domain Glossary
 
 > **Prerequisites:** None. Reference dictionary for the entire FORSETI curriculum.  
 > **You will be able to:**
@@ -24,7 +24,7 @@
 ---
 
 ### <a id="adaptive-immune-system"></a>Adaptive Immune System
-- 🧒 **Like you're five:** A parent who gets sterner each time the same trick is tried — warning, then high shelf, then locked kitchen.
+- 🧒 **Like you're five:** A parent who gets sterner each time the same trick is tried. Warning, then high shelf, then locked kitchen.
 - 🎓 **Formal Definition:** The closed Red/Blue adaptive loop where Blue's containment response escalates with repeated occurrences of the SAME invariant this session (soft response → capability quarantine → mandate suspension), on top of the pre-existing Red-side strategy adaptation.
 - 📍 **Codebase Location:** `backend/app/feedback/policy_adapter.py`; see [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md).
 
@@ -59,8 +59,8 @@
 ---
 
 ### <a id="authority-dimensions"></a>Authority Dimensions
-- 🧒 **Like you're five:** The seven rules Mum set: how much, how big, which road, which shop, what kind of items, by what time, and — added later — WHO the money actually goes to.
-- 🎓 **Formal Definition:** The seven orthogonal constraints defining a valid delegated grant: `AMOUNT`, `PER_TX`, `RAIL`, `MERCHANT`, `PURPOSE`, `TIME`, and `BENEFICIARY` (the 7th, added by the Agentic Security Runtime expansion — see [Beneficiary Dimension](#beneficiary-dimension)).
+- 🧒 **Like you're five:** The seven rules Mum set: how much, how big, which road, which shop, what kind of items, by what time, and, added later, WHO the money actually goes to.
+- 🎓 **Formal Definition:** The seven orthogonal constraints defining a valid delegated grant: `AMOUNT`, `PER_TX`, `RAIL`, `MERCHANT`, `PURPOSE`, `TIME`, and `BENEFICIARY` (the 7th, added by the Agentic Security Runtime expansion, see [Beneficiary Dimension](#beneficiary-dimension)).
 - 📍 **Codebase Location:** `backend/app/models/state.py`
 
 ---
@@ -87,7 +87,7 @@
 ---
 
 ### <a id="beneficiary-dimension"></a>Beneficiary Dimension
-- 🧒 **Like you're five:** Rule 7: not just how much, how, and where — but WHO the money actually ends up with.
+- 🧒 **Like you're five:** Rule 7: not just how much, how, and where, but WHO the money actually ends up with.
 - 🎓 **Formal Definition:** The 7th authority dimension, naming which settlement counterparties (VPAs) a delegation permits, independent of amount, rail, and merchant category. Guarded by `INV_07_UNAUTHORIZED_BENEFICIARY`.
 - 📍 **Codebase Location:** `backend/app/models/state.py`; see [LEARN_16](LEARN_16_INTENT_FIREWALL.md).
 
@@ -108,7 +108,7 @@
 ---
 
 ### <a id="constraint-erosion"></a>Constraint Erosion
-- 🧒 **Like you're five:** Sneaking one tiny forbidden thing into the cart, then a bigger one next time, then almost the whole cart — hoping nobody notices it happening slowly.
+- 🧒 **Like you're five:** Sneaking one tiny forbidden thing into the cart, then a bigger one next time, then almost the whole cart. Hoping nobody notices it happening slowly.
 - 🎓 **Formal Definition:** An attack spreading purpose drift across a sequence of transactions of increasing severity rather than one obvious spike, demonstrating that `INV_02_SEMANTIC_INTENT_DRIFT` is a deterministic membership check that catches a small first slice exactly as reliably as a blatant last one.
 - 📍 **Codebase Location:** `backend/app/redteam/vectors/constraint_erosion.py`; see [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md).
 
@@ -122,8 +122,8 @@
 ---
 
 ### <a id="deception-lab"></a>Deception Lab
-- 🧒 **Like you're five:** A lie-detector sitting next to the robot helper's ear, checking whether anyone just whispered a trick — completely separately from whether the robot's purchase broke any money rule.
-- 🎓 **Formal Definition:** Four deterministic detectors (prompt injection, tool-output poisoning, context/memory poisoning, self-approval) that re-derive ground truth from data no deception can touch, orthogonal to authority-dimension enforcement — a transaction can be authority-clean and still trip a detector here.
+- 🧒 **Like you're five:** A lie-detector sitting next to the robot helper's ear, checking whether anyone just whispered a trick. Completely separately from whether the robot's purchase broke any money rule.
+- 🎓 **Formal Definition:** Four deterministic detectors (prompt injection, tool-output poisoning, context/memory poisoning, self-approval) that re-derive ground truth from data no deception can touch, orthogonal to authority-dimension enforcement, a transaction can be authority-clean and still trip a detector here.
 - 📍 **Codebase Location:** `backend/app/deception_lab/detectors.py`; see [LEARN_17](LEARN_17_DECEPTION_LAB.md).
 
 ---
@@ -150,7 +150,7 @@
 ---
 
 ### <a id="escalation-ladder"></a>Escalation Ladder
-- 🧒 **Like you're five:** First a warning, then the cookie jar moves to a high shelf, then the whole kitchen gets locked — the SAME misbehaviour gets a sterner response each time.
+- 🧒 **Like you're five:** First a warning, then the cookie jar moves to a high shelf, then the whole kitchen gets locked, the SAME misbehaviour gets a sterner response each time.
 - 🎓 **Formal Definition:** The Blue-side response-strength progression keyed off the count of PRIOR occurrences of the same invariant this session: soft response (1st) → `CAPABILITY_QUARANTINED` (2nd) → `AGENT_SUSPENDED` (3rd+, capped).
 - 📍 **Codebase Location:** `backend/app/feedback/policy_adapter.py`; see [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md).
 
@@ -171,7 +171,7 @@
 ---
 
 ### <a id="graph-sentinel"></a>Graph Sentinel (Payment Graph Sentinel)
-- 🧒 **Like you're five:** Watching whether ten different kids who've never met suddenly all start paying the same stranger — something no single kid's piggy bank could ever notice alone.
+- 🧒 **Like you're five:** Watching whether ten different kids who've never met suddenly all start paying the same stranger, something no single kid's piggy bank could ever notice alone.
 - 🎓 **Formal Definition:** A training-time, cross-authority entity graph (agent↔merchant, with device-sharing) producing 8 graph-derived ML features (degree, PageRank, betweenness, Louvain community, device sharing). Built once per dataset-generation run; not a live per-round graph.
 - 📍 **Codebase Location:** `backend/app/graph_sentinel/graph_builder.py`; see [LEARN_19](LEARN_19_GRAPH_SENTINEL.md).
 
@@ -270,7 +270,7 @@
 
 ### <a id="reconciliation-drift"></a>Reconciliation Drift
 - 🧒 **Like you're five:** A shop's receipt machine printing the same sale twice by mistake, so it looks like you bought two of something you only bought once.
-- 🎓 **Formal Definition:** A post-authorization lifecycle failure (Kill Chain stage 11, `RECON_02`) where the same authorised obligation is captured more than once on the same rail — a duplicated/replayed settlement message inflating the reconciled total beyond what was actually authorised. Distinct from a DTL invariant: every authority dimension is satisfied at authorization time on both legs.
+- 🎓 **Formal Definition:** A post-authorization lifecycle failure (Kill Chain stage 11, `RECON_02`) where the same authorised obligation is captured more than once on the same rail, a duplicated/replayed settlement message inflating the reconciled total beyond what was actually authorised. Distinct from a DTL invariant: every authority dimension is satisfied at authorization time on both legs.
 - 📍 **Codebase Location:** `backend/app/settlement/reconciliation.py` (`detect_reconciliation_drift`)
 
 ---
@@ -291,7 +291,7 @@
 
 ### <a id="settlement-conflict"></a>Settlement Conflict
 - 🧒 **Like you're five:** One shop says "sold!" and a different shop says "refunded!" about the exact same toy, at the exact same time.
-- 🎓 **Formal Definition:** A post-authorization lifecycle failure (Kill Chain stage 10, `RECON_01`) where one leg of an authorised obligation is CAPTURED on one rail while a different leg of the SAME obligation is REFUNDED on a different rail — two locally valid instructions producing an economically inconsistent final state that no single rail-local view can see.
+- 🎓 **Formal Definition:** A post-authorization lifecycle failure (Kill Chain stage 10, `RECON_01`) where one leg of an authorised obligation is CAPTURED on one rail while a different leg of the SAME obligation is REFUNDED on a different rail, two locally valid instructions producing an economically inconsistent final state that no single rail-local view can see.
 - 📍 **Codebase Location:** `backend/app/settlement/reconciliation.py` (`detect_settlement_conflict`)
 
 ---
@@ -311,8 +311,8 @@
 ---
 
 ### <a id="tokenized-payment-credential"></a>Tokenized Payment Credential
-- 🧒 **Like you're five:** A wristband at a fair that only works for 3 rides, under the height limit, until 6pm — and stops working the moment the fair operator says so, even though nobody wrote on the wristband itself.
-- 🎓 **Formal Definition:** `TokenizedPaymentCredential` — a synthetic scoped-token model inspired by token lifecycle and scoped-authorization concepts in real payment tokenization schemes, **not** an implementation of any real network's token vault (e.g. Mastercard MDES). Its scope is clamped to the live DTL authority at issuance and independently re-checked against that authority's current state at every use, so it can never authorise more than the delegation currently allows.
+- 🧒 **Like you're five:** A wristband at a fair that only works for 3 rides, under the height limit, until 6pm, and stops working the moment the fair operator says so, even though nobody wrote on the wristband itself.
+- 🎓 **Formal Definition:** `TokenizedPaymentCredential`, a synthetic scoped-token model inspired by token lifecycle and scoped-authorization concepts in real payment tokenization schemes, **not** an implementation of any real network's token vault (e.g. Mastercard MDES). Its scope is clamped to the live DTL authority at issuance and independently re-checked against that authority's current state at every use, so it can never authorise more than the delegation currently allows.
 - 📍 **Codebase Location:** `backend/app/tokenization/models.py`, `backend/app/tokenization/lifecycle.py`
 
 ---
@@ -325,8 +325,8 @@
 ---
 
 ### <a id="unified-risk-engine"></a>Unified Risk Engine
-- 🧒 **Like you're five:** The office assistant who averages five teachers' grades onto one summary line for the principal — without re-grading anyone's work, and without hiding it if the math teacher already failed you.
-- 🎓 **Formal Definition:** An equal-weighted composite of five signals other modules already computed (DTL invariant outcome, Intent Firewall drift, Deception Lab detection, ML probability, kill-chain score). `deterministic_override` makes explicit that the DTL invariant decided the outcome before this score was even computed — it is a synthesis, not a detector.
+- 🧒 **Like you're five:** The office assistant who averages five teachers' grades onto one summary line for the principal, without re-grading anyone's work, and without hiding it if the math teacher already failed you.
+- 🎓 **Formal Definition:** An equal-weighted composite of five signals other modules already computed (DTL invariant outcome, Intent Firewall drift, Deception Lab detection, ML probability, kill-chain score). `deterministic_override` makes explicit that the DTL invariant decided the outcome before this score was even computed. It is a synthesis, not a detector.
 - 📍 **Codebase Location:** `backend/app/risk_engine/risk.py`; see [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md).
 
 ---
@@ -366,4 +366,4 @@
 ---
 
 ## Where to go next
-→ [LEARN_14 — Teach It Back](LEARN_14_TEACH_IT_BACK.md)
+→ [LEARN_14. Teach It Back](LEARN_14_TEACH_IT_BACK.md)

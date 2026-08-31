@@ -1,10 +1,10 @@
-# LEARN_19 — Payment Graph Sentinel & the ML Feature Expansion
+# LEARN_19: Payment Graph Sentinel & the ML Feature Expansion
 
 > **Prerequisites:** [LEARN_06](LEARN_06_THE_ML_MODEL.md)  
 > **You will be able to:**
 > - Explain what a cross-authority entity graph can see that every other feature group (LEARN_06) structurally cannot.
 > - Trace the non-leakage discipline: why a transaction's graph features are snapshotted *before* its own edge is added.
-> - Recount, in full, the merchant-identity leakage bug this module introduced and how the retrained numbers proved it — this is the single best case study in the whole codebase for "a suspicious result is a bug report, not a win."
+> - Recount, in full, the merchant-identity leakage bug this module introduced and how the retrained numbers proved it. This is the single best case study in the whole codebase for "a suspicious result is a bug report, not a win."
 > - Read the extended ablation table (37 features, 6 groups, 9 variants) and interpret the new `measured_graph_feature_lift`.  
 > **Files this chapter is about:** `backend/app/graph_sentinel/graph_builder.py`, `backend/app/detector/feature_schema.py`, `backend/app/detector/dataset_builder.py`, `backend/app/detector/ablation.py`
 
@@ -13,13 +13,13 @@
 ## 1. The Blind Spot Every Other Feature Group Has
 
 🧒 **Like you're five**  
-Every clue you've learned so far — how much, how fast, what shop, what basket — is about **one kid and their one piggy bank**. But what if TEN different kids, who've never met, all start paying the SAME stranger on the same day? No single piggy bank's rules would ever notice that — you'd need to be watching *all* the piggy banks at once and asking "who do they have in common?"
+Every clue you've learned so far. How much, how fast, what shop, what basket. Is about **one kid and their one piggy bank**. But what if TEN different kids, who've never met, all start paying the SAME stranger on the same day? No single piggy bank's rules would ever notice that, you'd need to be watching *all* the piggy banks at once and asking "who do they have in common?"
 
 🏪 **In real life**  
-`DTLFeatureExtractor` (LEARN_06) computes every feature from ONE authority's own state and history — by construction, none of its 29 original features can see a pattern that only exists **across** authorities: many different agents converging on the same merchant, several agents sharing a device fingerprint, or one agent's centrality in the overall transaction graph. Payment Graph Sentinel exists to close exactly that blind spot.
+`DTLFeatureExtractor` (LEARN_06) computes every feature from ONE authority's own state and history, by construction, none of its 29 original features can see a pattern that only exists **across** authorities: many different agents converging on the same merchant, several agents sharing a device fingerprint, or one agent's centrality in the overall transaction graph. Payment Graph Sentinel exists to close exactly that blind spot.
 
 🎓 **Properly**  
-`backend/app/graph_sentinel/graph_builder.py:36`'s `PaymentGraph` is an incrementally-built agent↔merchant graph, using `networkx` for PageRank, betweenness centrality, and Louvain community detection. It is a **training-time** construct — built once across the whole synthetic dataset-generation trajectory (25 authorities, thousands of transactions) — not a live, per-round graph. The live single-authority arena genuinely has no cross-authority signal to offer, and `feature_schema.py` says so explicitly rather than fabricating one.
+`backend/app/graph_sentinel/graph_builder.py:36`'s `PaymentGraph` is an incrementally-built agent↔merchant graph, using `networkx` for PageRank, betweenness centrality, and Louvain community detection. It is a **training-time** construct, built once across the whole synthetic dataset-generation trajectory (25 authorities, thousands of transactions), not a live, per-round graph. The live single-authority arena genuinely has no cross-authority signal to offer, and `feature_schema.py` says so explicitly rather than fabricating one.
 
 ---
 
@@ -43,7 +43,7 @@ Every clue you've learned so far — how much, how fast, what shop, what basket 
 │                                          │ this transaction's device.     │
 │ graph_cross_rail_fanout_velocity        │ The ONE graph feature needing │
 │                                          │ no cross-authority graph at   │
-│                                          │ all — computed from tx_history│
+│                                          │ all. Computed from tx_history│
 │                                          │ directly, live-arena included.│
 └──────────────────────────────────────────┴─────────────────────────────────┘
 ```
@@ -52,7 +52,7 @@ Every clue you've learned so far — how much, how fast, what shop, what basket 
 
 ### The non-leakage rule, and why it's the whole ballgame
 
-`PaymentGraph.snapshot_features()` must be called **before** `add_transaction()` for the same transaction — a transaction's OWN edge must never appear in its own features:
+`PaymentGraph.snapshot_features()` must be called **before** `add_transaction()` for the same transaction, a transaction's OWN edge must never appear in its own features:
 
 ```python
 # backend/app/detector/dataset_builder.py (inside emit())
@@ -61,9 +61,9 @@ features = DTLFeatureExtractor.extract_features(auth, tx, history, graph_feature
 graph.add_transaction(auth.agent_id, tx.merchant_id, tx.device_id)   # AFTER, not before
 ```
 
-This is the exact same anti-leakage discipline LEARN_06 already teaches for spend-booking order — applied to a graph instead of a ledger balance.
+This is the exact same anti-leakage discipline LEARN_06 already teaches for spend-booking order. Applied to a graph instead of a ledger balance.
 
-`graph_features` is an **optional** parameter on `extract_features()`. When absent — every live arena call today, since a single round has only one authority — every graph_* feature defaults to `0.0`, **except** `graph_cross_rail_fanout_velocity`, which is computed from `tx_history` and needs no cross-authority graph at all. This is stated as an honest "no signal available," not a placeholder.
+`graph_features` is an **optional** parameter on `extract_features()`. When absent, every live arena call today, since a single round has only one authority, every graph_* feature defaults to `0.0`, **except** `graph_cross_rail_fanout_velocity`, which is computed from `tx_history` and needs no cross-authority graph at all. This is stated as an honest "no signal available," not a placeholder.
 
 ---
 
@@ -73,15 +73,15 @@ This is worth reading slowly, because it is the clearest example in the whole co
 
 ### What happened
 
-The first retrain after adding graph features scored **PR-AUC = 1.0, ROC-AUC = 1.0, F1 = 1.0** — and the #1 SHAP feature was `graph_merchant_in_degree`.
+The first retrain after adding graph features scored **PR-AUC = 1.0, ROC-AUC = 1.0, F1 = 1.0**, and the #1 SHAP feature was `graph_merchant_in_degree`.
 
 ### Why that should make you suspicious, not happy
 
-A perfect score on a fraud-detection benchmark is almost never a genuine result — it is almost always a **leak**: some feature that, by construction of the data generator, is a near-perfect proxy for the label. The previous (pre-graph) baseline scored **0.9400** PR-AUC — a real, hard-won number, not a trivial one. Jumping to a flawless 1.0 the moment ONE new feature group was added is exactly the shape a leak takes.
+A perfect score on a fraud-detection benchmark is almost never a genuine result, it is almost always a **leak**: some feature that, by construction of the data generator, is a near-perfect proxy for the label. The previous (pre-graph) baseline scored **0.9400** PR-AUC, a real, hard-won number, not a trivial one. Jumping to a flawless 1.0 the moment ONE new feature group was added is exactly the shape a leak takes.
 
 ### Finding the actual leak
 
-`dataset_builder.py`'s `_build_transaction()` (pre-existing code, unrelated to this session's changes) routes **every attack family** through exactly ONE fixed `merchant_id` string — `"merch_split_chain"` for `CROSS_RAIL_SPLIT`, `"merch_laundering_mega"` for `INTENT_LAUNDERING`, and so on — and legitimate traffic through yet another fixed string. Because `graph_merchant_in_degree` and `graph_merchant_pagerank` are keyed by `merchant_id`, they became a **near-perfect fingerprint of the label**, re-encoded through a graph node identity instead of a raw string. This is precisely the proxy-leakage failure mode the dataset generator's own comments already warn about for stored-value ratio and amount-range overlap — it simply hadn't been applied to merchant identity before, because raw `merchant_id` was never a feature until graph nodes were keyed by it.
+`dataset_builder.py`'s `_build_transaction()` (pre-existing code, unrelated to this session's changes) routes **every attack family** through exactly ONE fixed `merchant_id` string, `"merch_split_chain"` for `CROSS_RAIL_SPLIT`, `"merch_laundering_mega"` for `INTENT_LAUNDERING`, and so on, and legitimate traffic through yet another fixed string. Because `graph_merchant_in_degree` and `graph_merchant_pagerank` are keyed by `merchant_id`, they became a **near-perfect fingerprint of the label**, re-encoded through a graph node identity instead of a raw string. This is precisely the proxy-leakage failure mode the dataset generator's own comments already warn about for stored-value ratio and amount-range overlap, it simply hadn't been applied to merchant identity before, because raw `merchant_id` was never a feature until graph nodes were keyed by it.
 
 ### The fix: `_diversify_merchant()`
 
@@ -99,7 +99,7 @@ def _diversify_merchant(self, tx: SyntheticTransaction) -> None:
         tx.merchant_id, tx.merchant_name = merchant_id, merchant_name
 ```
 
-22% of **all** traffic — attack and legitimate alike — is rerouted through a small shared merchant pool, breaking the 1:1 mapping between merchant identity and label. MCC is deliberately left untouched, so semantic/category-based features are unaffected; only the merchant-identity-keyed graph node loses its fingerprint property.
+22% of **all** traffic, attack and legitimate alike, is rerouted through a small shared merchant pool, breaking the 1:1 mapping between merchant identity and label. MCC is deliberately left untouched, so semantic/category-based features are unaffected; only the merchant-identity-keyed graph node loses its fingerprint property.
 
 ### The retrain after the fix
 
@@ -120,7 +120,7 @@ def _diversify_merchant(self, tx: SyntheticTransaction) -> None:
 └──────────────────────────────┴────────────────┴──────────────────────────┘
 ```
 
-**0.9209 is still a genuine improvement** over the pre-graph 0.9400 baseline — it just isn't a fabricated one anymore. That distinction is the entire lesson.
+**0.9209 is still a genuine improvement** over the pre-graph 0.9400 baseline, it just isn't a fabricated one anymore. That distinction is the entire lesson.
 
 ---
 
@@ -148,7 +148,7 @@ measured_graph_feature_lift = PR-AUC(I: raw+DTL+graph)
                              - PR-AUC(H: raw+DTL only)              = +0.0095 (+1.0%)
 ```
 
-Both numbers come from the **same** genuinely-retrained-per-variant harness that already produced the DTL lift in LEARN_06 — nothing new was fabricated to produce the graph number, and the graph lift is deliberately measured on TOP of DTL rather than on top of nothing, so it isolates what graph features add once delegation/cross-rail features are already present.
+Both numbers come from the **same** genuinely-retrained-per-variant harness that already produced the DTL lift in LEARN_06. Nothing new was fabricated to produce the graph number, and the graph lift is deliberately measured on TOP of DTL rather than on top of nothing, so it isolates what graph features add once delegation/cross-rail features are already present.
 
 ---
 
@@ -163,14 +163,14 @@ Both numbers come from the **same** genuinely-retrained-per-variant harness that
 <details>
 <summary>Answers</summary>
 
-1. Cross-authority patterns — many different agents converging on one merchant, shared device fingerprints, or an agent's centrality in the overall graph — since every other group is computed from one authority's own state alone.
-2. Otherwise a transaction's own edge would leak into its own features (e.g. its own device-sharing edge inflating its own `graph_device_shared_count`) — the same non-leakage discipline as extracting features before booking spend.
+1. Cross-authority patterns, many different agents converging on one merchant, shared device fingerprints, or an agent's centrality in the overall graph, since every other group is computed from one authority's own state alone.
+2. Otherwise a transaction's own edge would leak into its own features (e.g. its own device-sharing edge inflating its own `graph_device_shared_count`), the same non-leakage discipline as extracting features before booking spend.
 3. Every attack family (and legitimate traffic) routed through exactly ONE fixed `merchant_id`, so the new merchant-identity-keyed graph features became a near-perfect label fingerprint. Found because a perfect 1.0 PR-AUC is inherently suspicious, and the pre-graph baseline (0.9400) proved it wasn't previously achievable.
 4. Because MCC-based (semantic/category) features are legitimate and unaffected by the leak; only the merchant-IDENTITY-keyed graph features needed their 1:1 mapping to the label broken.
-5. It compares PR-AUC(Raw+DTL+Graph) against PR-AUC(Raw+DTL) — isolating what graph adds once delegation/cross-rail signal is already available, rather than conflating graph's contribution with DTL's.
+5. It compares PR-AUC(Raw+DTL+Graph) against PR-AUC(Raw+DTL). Isolating what graph adds once delegation/cross-rail signal is already available, rather than conflating graph's contribution with DTL's.
 </details>
 
 ---
 
 ## Where to go next
-→ [LEARN_20 — Adaptive Immune System & the Unified Risk Engine](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md)
+→ [LEARN_20. Adaptive Immune System & the Unified Risk Engine](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md)

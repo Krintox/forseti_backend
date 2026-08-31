@@ -1,4 +1,4 @@
-# LEARN_11 — Pipelines and Artifacts
+# LEARN_11: Pipelines and Artifacts
 
 > **Prerequisites:** [LEARN_02](LEARN_02_TECH_STACK.md), [LEARN_06](LEARN_06_THE_ML_MODEL.md), [LEARN_08](LEARN_08_CRYPTO_AUDIT.md)  
 > **You will be able to:**
@@ -147,7 +147,7 @@ Evaluated on the identical 3,600-sample test slice under the **attack-family hol
 | Deterministic DTL Invariant | 3 | 0.2530 | 0.8614 | **0.8438** | [0.736, 0.913] | 0.15761 |
 
 *With the attack family seen in training:* hybrid ML cross-rail recall is **0.8438** and the
-invariant is **0.8438** again — unchanged, because it has no fitted parameter that training data
+invariant is **0.8438** again. Unchanged, because it has no fitted parameter that training data
 can move.
 
 **Two comparisons, only one of which the sample size supports.** The gap between a model with
@@ -219,4 +219,4 @@ Measured over 10,000 continuous transactions:
 ---
 
 ## Where to go next
-→ [LEARN_12 — Tests and Verify](LEARN_12_TESTS_AND_VERIFY.md)
+→ [LEARN_12. Tests and Verify](LEARN_12_TESTS_AND_VERIFY.md)

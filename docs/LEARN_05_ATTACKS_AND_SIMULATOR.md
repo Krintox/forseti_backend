@@ -1,9 +1,9 @@
-# LEARN_05 — Attacks and Simulator
+# LEARN_05: Attacks and Simulator
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md), [LEARN_04](LEARN_04_THE_DTL_CORE.md)  
 > **You will be able to:**
 > - Explain the mechanics of the three standards-inspired payment rail adapters.
-> - Trace the execution of the original nine executable attack vectors in the red team suite (plus 6 more added later — see the table near the end of this chapter, and LEARN_16/17/20).
+> - Trace the execution of the original nine executable attack vectors in the red team suite (plus 6 more added later. See the table near the end of this chapter, and LEARN_16/17/20).
 > - Understand how `taxonomy.py` dynamically parses `docs/taxonomy.md` into structured records.
 > - Articulate why 46 vectors in the 63-vector taxonomy are explicitly classified as research-only.  
 > **Files this chapter is about:** `backend/app/simulator/state_machine.py`, `backend/app/simulator/adapters/*.py`, `backend/app/redteam/vectors/*.py`, `backend/app/taxonomy.py`, `docs/taxonomy.md`
@@ -62,7 +62,7 @@ classDiagram
 
 ## 2. The Original Nine Executable Attack Vectors
 
-FORSETI's original red team suite comprised nine fully implemented attack vectors that directly target authority dimensions (6 more were added later — see §4):
+FORSETI's original red team suite comprised nine fully implemented attack vectors that directly target authority dimensions (6 more were added later, see §4):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -191,16 +191,16 @@ The taxonomy grew from 55 to 61 vectors, and from 9 to 15 executable, in the Age
 | 60 | `AUTHORITY_IMPERSONATION` | 14 | Deception Lab | [LEARN_17](LEARN_17_DECEPTION_LAB.md) |
 | 61 | `CONSTRAINT_EROSION` | 15 | PURPOSE (reuses `INV_02`, no new invariant) | [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md) |
 
-`CONSTRAINT_EROSION` is worth a special note here: it spreads purpose drift across 4 escalating legs (groceries → small store-credit slice → larger voucher → near-total crypto-token conversion) instead of one obvious spike, to demonstrate that `INV_02_SEMANTIC_INTENT_DRIFT` is a deterministic membership check, not a threshold — it catches the small first slice exactly as reliably as the blatant last one. It also fills what was previously the unmapped `GOAL_HIJACKING` kill-chain stage (LEARN_18).
+`CONSTRAINT_EROSION` is worth a special note here: it spreads purpose drift across 4 escalating legs (groceries → small store-credit slice → larger voucher → near-total crypto-token conversion) instead of one obvious spike, to demonstrate that `INV_02_SEMANTIC_INTENT_DRIFT` is a deterministic membership check, not a threshold. It catches the small first slice exactly as reliably as the blatant last one. It also fills what was previously the unmapped `GOAL_HIJACKING` kill-chain stage (LEARN_18).
 
-Two more vectors closed the LAST unmapped kill-chain stages — neither is an authority-dimension attack, so neither reuses an existing invariant:
+Two more vectors closed the LAST unmapped kill-chain stages. Neither is an authority-dimension attack, so neither reuses an existing invariant:
 
 | ID | Vector | Round | Dimension / Layer | Chapter |
 |---|---|---:|---|---|
 | 62 | `SETTLEMENT_CONFLICT` | 16 | SETTLEMENT_INTEGRITY (`RECON_01`, post-authorization) | [LEARN_21](LEARN_21_TOKENIZATION.md) |
 | 63 | `RECONCILIATION_DRIFT` | 17 | SETTLEMENT_INTEGRITY (`RECON_02`, post-authorization) | [LEARN_21](LEARN_21_TOKENIZATION.md) |
 
-With these two, all 11 Kill Chain stages now have an implemented vector behind them — see LEARN_18 and LEARN_21.
+With these two, all 11 Kill Chain stages now have an implemented vector behind them, see LEARN_18 and LEARN_21.
 
 ---
 
@@ -218,11 +218,11 @@ With these two, all 11 Kill Chain stages now have an implemented vector behind t
 1. `CardTokenRailAdapter` (MDES/VTS-inspired), `UPICircleRailAdapter` (UPI-Circle OC 201-B inspired), and `AgenticAP2RailAdapter` (Google AP2-inspired).
 2. `CROSS_RAIL_SPLIT` exploits the multi-rail blind spot by dividing money across payment channels; `INTENT_LAUNDERING` exploits merchant category coarseness by purchasing stored-value gift cards under legitimate grocery MCCs.
 3. Because each rail adapter only evaluates the transaction against its own local limit ($₹4,000 \le ₹10,000$) and cannot see spend occurring on other rails.
-4. 63 total vectors in `docs/taxonomy.md`; 17 are executable in code (`backend/app/taxonomy.py`'s `IMPLEMENTED` dict) — the original 9, plus 6 added by the Agentic Security Runtime expansion, plus 2 Settlement Reconciliation vectors (§4).
+4. 63 total vectors in `docs/taxonomy.md`; 17 are executable in code (`backend/app/taxonomy.py`'s `IMPLEMENTED` dict), the original 9, plus 6 added by the Agentic Security Runtime expansion, plus 2 Settlement Reconciliation vectors (§4).
 5. `INV_05_PER_TX_CAP_EXCEEDED` (`backend/app/dtl/invariant_engine.py:252`).
 </details>
 
 ---
 
 ## Where to go next
-→ [LEARN_06 — The ML Model](LEARN_06_THE_ML_MODEL.md)
+→ [LEARN_06. The ML Model](LEARN_06_THE_ML_MODEL.md)

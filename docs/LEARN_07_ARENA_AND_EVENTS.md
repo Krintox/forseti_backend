@@ -1,4 +1,4 @@
-# LEARN_07 — Arena and Events
+# LEARN_07: Arena and Events
 
 > **Prerequisites:** [LEARN_03](LEARN_03_MAP_OF_THE_CODEBASE.md), [LEARN_04](LEARN_04_THE_DTL_CORE.md)  
 > **You will be able to:**
@@ -104,9 +104,9 @@ Every action in the system is logged as a strongly-typed `ArenaEvent` (`backend/
 └──────────────┴─────────────────────────────────────────────────────────┘
 ```
 
-> **`INTENT_FIREWALL_VERDICT` and `DECEPTION_LAB_VERDICT` fire on EVERY step**, not only on a violation/detection — `ALLOW` and `CLEAN` are real, informative verdicts, so "nothing happened" is exactly as visible in the live log as a breach is. Both were added by the Agentic Security Runtime expansion; the original 23-type vocabulary is otherwise unchanged.
+> **`INTENT_FIREWALL_VERDICT` and `DECEPTION_LAB_VERDICT` fire on EVERY step**, not only on a violation/detection, `ALLOW` and `CLEAN` are real, informative verdicts, so "nothing happened" is exactly as visible in the live log as a breach is. Both were added by the Agentic Security Runtime expansion; the original 23-type vocabulary is otherwise unchanged.
 >
-> The expansion also added `POST /api/arena/campaign` — runs a server-orchestrated sequence of rounds in one call (default: `RAIL_SCOPE_VIOLATION` ×3, demonstrating the Blue escalation ladder end to end), streaming every constituent round's events over this SAME `/ws/arena` socket. See [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md).
+> The expansion also added `POST /api/arena/campaign`. Runs a server-orchestrated sequence of rounds in one call (default: `RAIL_SCOPE_VIOLATION` ×3, demonstrating the Blue escalation ladder end to end), streaming every constituent round's events over this SAME `/ws/arena` socket. See [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md).
 
 ### The Nine System Actors
 
@@ -224,4 +224,4 @@ Separating `NONE/WITHIN_AUTHORITY` ensures that Blue victories are claimed **onl
 ---
 
 ## Where to go next
-→ [LEARN_08 — Crypto Audit](LEARN_08_CRYPTO_AUDIT.md)
+→ [LEARN_08. Crypto Audit](LEARN_08_CRYPTO_AUDIT.md)

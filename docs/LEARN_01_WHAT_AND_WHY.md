@@ -1,4 +1,4 @@
-# LEARN_01 — What and Why
+# LEARN_01: What and Why
 
 > **Prerequisites:** [LEARN_00](LEARN_00_START_HERE.md)  
 > **You will be able to:**
@@ -231,7 +231,7 @@ To maintain absolute scientific credibility, FORSETI establishes a strict claim 
 
 1. Authorization (verifying limit and holding funds), Capture (merchant batch submission), and Settlement (interbank transfer of actual funds).
 2. Because each rail adapter only checks its own local spend register ($S(r_i) + a_j \le L(r_i)$) and cannot see spend occurring on other rails.
-3. AMOUNT (global budget ceiling), PER_TX (single transaction cap), RAIL (permitted payment rails), MERCHANT (merchant MCC allowlist), PURPOSE (semantic cart items/exclusions), TIME (delegation validity window), and BENEFICIARY (permitted settlement counterparties — the 7th dimension, added by the Agentic Security Runtime expansion; see LEARN_16).
+3. AMOUNT (global budget ceiling), PER_TX (single transaction cap), RAIL (permitted payment rails), MERCHANT (merchant MCC allowlist), PURPOSE (semantic cart items/exclusions), TIME (delegation validity window), and BENEFICIARY (permitted settlement counterparties, the 7th dimension, added by the Agentic Security Runtime expansion; see LEARN_16).
 4. Because autonomous AI agents operate via machine-to-machine API calls at microsecond speeds with no human present on the checkout page.
 5. No. The AI agent layer is strictly advisory. All authorization and containment decisions are made deterministically by the DTL Ledger and Invariant Engine (`backend/app/ai/agents.py:7`).
 </details>
@@ -239,4 +239,4 @@ To maintain absolute scientific credibility, FORSETI establishes a strict claim 
 ---
 
 ## Where to go next
-→ [LEARN_02 — Tech Stack](LEARN_02_TECH_STACK.md)
+→ [LEARN_02. Tech Stack](LEARN_02_TECH_STACK.md)

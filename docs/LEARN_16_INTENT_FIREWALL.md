@@ -1,8 +1,8 @@
-# LEARN_16 — The Agent Intent Firewall & the Seventh Dimension
+# LEARN_16: The Agent Intent Firewall & the Seventh Dimension
 
 > **Prerequisites:** [LEARN_04](LEARN_04_THE_DTL_CORE.md)  
 > **You will be able to:**
-> - Explain why a delegated grant needs a **seventh** dimension — BENEFICIARY — alongside the original six.
+> - Explain why a delegated grant needs a **seventh** dimension, BENEFICIARY, alongside the original six.
 > - Trace `INV_07_UNAUTHORIZED_BENEFICIARY` and explain why it consumes zero headroom, exactly like RAIL.
 > - Explain what the Intent Firewall actually computes, and why it deliberately does **not** re-implement detection.
 > - Read a drift vector and classify it as `ALLOW`, `PARTIAL_DRIFT`, or `HARD_DRIFT`.
@@ -14,19 +14,19 @@
 ## 1. Why a Seventh Dimension?
 
 🧒 **Like you're five**  
-Mum says "pay the electricity company, up to ₹6,000." Rule 6 (amount) is fine — you spent ₹3,200. Rule 4 (rail) is fine — you used the UPI wallet Mum allowed. Rule 4b (shop type) is fine — the biller code says "utilities." But you paid the WRONG electricity company — a copycat with an almost-identical name! None of the first six rules would ever catch that, because none of them ever asked *who the money actually went to*.
+Mum says "pay the electricity company, up to ₹6,000." Rule 6 (amount) is fine, you spent ₹3,200. Rule 4 (rail) is fine, you used the UPI wallet Mum allowed. Rule 4b (shop type) is fine, the biller code says "utilities." But you paid the WRONG electricity company, a copycat with an almost-identical name! None of the first six rules would ever catch that, because none of them ever asked *who the money actually went to*.
 
 🏪 **In real life**  
-A bill-pay delegation like "pay the electricity board, ≤₹6,000/month" authorizes money to move to **one specific counterparty**, not merely a merchant category. An agent whose bill-lookup tool is spoofed — or that simply matches the wrong similarly-named biller — can move money to a VPA the human never named, while every other dimension (amount, rail, merchant category) looks completely legitimate. LEARN_04 covers six dimensions; this chapter adds the one FORSETI's Module 1 expansion introduced: **BENEFICIARY**.
+A bill-pay delegation like "pay the electricity board, ≤₹6,000/month" authorizes money to move to **one specific counterparty**, not merely a merchant category. An agent whose bill-lookup tool is spoofed, or that simply matches the wrong similarly-named biller, can move money to a VPA the human never named, while every other dimension (amount, rail, merchant category) looks completely legitimate. LEARN_04 covers six dimensions; this chapter adds the one FORSETI's Module 1 expansion introduced: **BENEFICIARY**.
 
 🎓 **Properly**  
-`AuthorityDimension.BENEFICIARY` (`backend/app/models/state.py:38`) is the seventh member of the dimension enum. `DTLGlobalAuthorityState.beneficiary_scope: List[str]` (`state.py`, added alongside the other scope fields) names the settlement counterparties a grant permits. An **empty** list means unconstrained — the same convention `permitted_mccs` already uses, so a grant that never mentions a beneficiary behaves exactly as it did before this dimension existed. `allows_beneficiary()` is the membership check, and `authority_vector()` grew a `"BENEFICIARY"` row alongside the original six so the UI's authority table shows all seven without a special case.
+`AuthorityDimension.BENEFICIARY` (`backend/app/models/state.py:38`) is the seventh member of the dimension enum. `DTLGlobalAuthorityState.beneficiary_scope: List[str]` (`state.py`, added alongside the other scope fields) names the settlement counterparties a grant permits. An **empty** list means unconstrained, the same convention `permitted_mccs` already uses, so a grant that never mentions a beneficiary behaves exactly as it did before this dimension existed. `allows_beneficiary()` is the membership check, and `authority_vector()` grew a `"BENEFICIARY"` row alongside the original six so the UI's authority table shows all seven without a special case.
 
 ---
 
 ## 2. `INV_07_UNAUTHORIZED_BENEFICIARY`
 
-The invariant lives in the **same registry** as the original six (`backend/app/dtl/invariant_engine.py:70`) — nothing about the other six invariants changed to make room for it. It slots into the evaluation order right after the MERCHANT check and before the semantic PURPOSE check, because beneficiary — like rail and merchant — is a *scope* question, and scope is checked before economic substance:
+The invariant lives in the **same registry** as the original six (`backend/app/dtl/invariant_engine.py:70`). Nothing about the other six invariants changed to make room for it. It slots into the evaluation order right after the MERCHANT check and before the semantic PURPOSE check, because beneficiary. Like rail and merchant. Is a *scope* question, and scope is checked before economic substance:
 
 ```
 TIME → RAIL → PER_TX → MERCHANT → BENEFICIARY → PURPOSE → AMOUNT
@@ -38,27 +38,27 @@ TIME → RAIL → PER_TX → MERCHANT → BENEFICIARY → PURPOSE → AMOUNT
 
 - **Grant:** ₹6,000 ceiling, `beneficiary_scope = ["vpa_electricity_board@upi"]`, rail = UPI, MCC 4900 (utilities).
 - **Leg 1 (legitimate):** ₹2,200 to `vpa_electricity_board@upi`. Rail ✓, MCC ✓, beneficiary ✓ → **passes cleanly**.
-- **Leg 2 (attack):** ₹3,200 to `vpa_regional-collections-utility@upi` — same rail, same MCC, amount well inside the remaining ₹3,800 of headroom.
+- **Leg 2 (attack):** ₹3,200 to `vpa_regional-collections-utility@upi`. Same rail, same MCC, amount well inside the remaining ₹3,800 of headroom.
   $$\texttt{"vpa\_regional-collections-utility@upi"} \notin \{\texttt{"vpa\_electricity\_board@upi"}\}$$
   $$\implies \textbf{INV\_07\_UNAUTHORIZED\_BENEFICIARY VIOLATION (severity HIGH)}$$
 
-Rail, amount, and merchant category are all independently in scope on leg 2 — **only** the beneficiary dimension catches it. That is the entire point of treating beneficiary as its own axis rather than folding it into "merchant."
+Rail, amount, and merchant category are all independently in scope on leg 2, **only** the beneficiary dimension catches it. That is the entire point of treating beneficiary as its own axis rather than folding it into "merchant."
 
 ### Containment: `BENEFICIARY_SCOPE_BLOCK`
 
-`AdversarialCostGovernor.apply_containment()` (`backend/app/dtl/cost_governor.py`) has a dedicated branch for `INV_07`, mirroring the existing `RAIL_SCOPE_BLOCK` pattern: the diverted transaction is refused, **zero headroom is consumed**, and every OTHER beneficiary in scope stays fully payable. This branch did not exist when Module 1 first shipped the invariant — see the "A Gap Found By Its Own Tests" box below.
+`AdversarialCostGovernor.apply_containment()` (`backend/app/dtl/cost_governor.py`) has a dedicated branch for `INV_07`, mirroring the existing `RAIL_SCOPE_BLOCK` pattern: the diverted transaction is refused, **zero headroom is consumed**, and every OTHER beneficiary in scope stays fully payable. This branch did not exist when Module 1 first shipped the invariant, see the "A Gap Found By Its Own Tests" box below.
 
-> **A gap found by its own tests.** When Module 1 first added `INV_07`, the cost governor had no `INV_07` branch at all. Because `_proof()`'s default `violated_skus` falls back to *every* item in the cart when the caller doesn't pass one explicitly, the beneficiary violation silently fell through to the governor's generic `SHADOW_QUARANTINE` message and never updated `active_policy` — unlike every other invariant, which sets a specific `DefensePolicy`. This was caught while building Module 5 (the escalation ladder), not by inspection: escalating a policy that was never being *set* in the first place would have silently done nothing. The fix (`cost_governor.py`) and its regression test are a working example of the project's own rule — the tests are what catch what a read-through misses.
+> **A gap found by its own tests.** When Module 1 first added `INV_07`, the cost governor had no `INV_07` branch at all. Because `_proof()`'s default `violated_skus` falls back to *every* item in the cart when the caller doesn't pass one explicitly, the beneficiary violation silently fell through to the governor's generic `SHADOW_QUARANTINE` message and never updated `active_policy`, unlike every other invariant, which sets a specific `DefensePolicy`. This was caught while building Module 5 (the escalation ladder), not by inspection: escalating a policy that was never being *set* in the first place would have silently done nothing. The fix (`cost_governor.py`) and its regression test are a working example of the project's own rule, the tests are what catch what a read-through misses.
 
 ---
 
 ## 3. The Intent Firewall: Reshaping, Not Reinventing
 
 🧒 **Like you're five**  
-Imagine six different referees, each watching one rule, each blowing a separate whistle. The Intent Firewall isn't a seventh referee — it's the scoreboard operator who takes whichever whistles *already* blew and paints one big red or yellow light so the crowd can see "how far off the rules" the play was, all at once.
+Imagine six different referees, each watching one rule, each blowing a separate whistle. The Intent Firewall isn't a seventh referee, it's the scoreboard operator who takes whichever whistles *already* blew and paints one big red or yellow light so the crowd can see "how far off the rules" the play was, all at once.
 
 🏪 **In real life**  
-A judge does not reason in terms of invariant codes ("`INV_07` fired"). They reason in terms of drift: *how far did this action stray from what was delegated, on every axis at once?* `backend/app/intent_firewall/` exists purely to answer that question — and deliberately does **not** re-implement detection. It reshapes the `SemanticDriftProof` objects `DTLInvariantEngine.evaluate_all()` already produced.
+A judge does not reason in terms of invariant codes ("`INV_07` fired"). They reason in terms of drift: *how far did this action stray from what was delegated, on every axis at once?* `backend/app/intent_firewall/` exists purely to answer that question, and deliberately does **not** re-implement detection. It reshapes the `SemanticDriftProof` objects `DTLInvariantEngine.evaluate_all()` already produced.
 
 🎓 **Properly**
 
@@ -74,27 +74,27 @@ def compute_drift_vector(tx_id: str, proofs: List[SemanticDriftProof]) -> Dict[s
             "drift_breakdown": breakdown, "violating_dimensions": [...]}
 ```
 
-Every number in the drift vector traces back to a `drift_score` the invariant engine already computed. `firewall_decision.py:31` then turns that vector into one of three verdicts, keyed off each invariant's own registered `severity` — not an invented scale:
+Every number in the drift vector traces back to a `drift_score` the invariant engine already computed. `firewall_decision.py:31` then turns that vector into one of three verdicts, keyed off each invariant's own registered `severity`, not an invented scale:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                    INTENT FIREWALL VERDICT LADDER                      │
 ├──────────────┬─────────────────────────────────────────────────────────┤
-│ ALLOW        │ No proofs at all — nothing drifted on any dimension.    │
+│ ALLOW        │ No proofs at all. Nothing drifted on any dimension.    │
 │ PARTIAL_DRIFT│ Drift confined to MEDIUM-severity dimensions            │
-│              │ (e.g. PER_TX overshoot) — a step-up query is enough.    │
-│ HARD_DRIFT   │ Any HIGH or CRITICAL dimension drifted — the action is  │
+│              │ (e.g. PER_TX overshoot), a step-up query is enough.    │
+│ HARD_DRIFT   │ Any HIGH or CRITICAL dimension drifted, the action is  │
 │              │ outside the grant in a way that must be blocked.        │
 └──────────────┴─────────────────────────────────────────────────────────┘
 ```
 
-This event fires on **every** transaction, not only on a violation — `ALLOW` is a real, informative verdict, not a silent no-op — so "nothing drifted" is as visible in the live arena as a breach is (`EventType.INTENT_FIREWALL_VERDICT`, `backend/app/arena/events.py`).
+This event fires on **every** transaction, not only on a violation, `ALLOW` is a real, informative verdict, not a silent no-op, so "nothing drifted" is as visible in the live arena as a breach is (`EventType.INTENT_FIREWALL_VERDICT`, `backend/app/arena/events.py`).
 
 ---
 
 ## 4. Attack E: `BeneficiaryDriftVector`
 
-`backend/app/redteam/vectors/beneficiary_drift.py:30` runs as round 10 in the arena. Its `authority_profile` re-grants the delegation as "₹6,000, `vpa_electricity_board@upi` only" for the duration of the round — the same pattern `RAIL_SCOPE_VIOLATION`, `PER_TX_BREACH`, and `LAPSED_MANDATE` already used for their own dimensions, so the demonstration always runs against the grant it was designed to break, never an implied one.
+`backend/app/redteam/vectors/beneficiary_drift.py:30` runs as round 10 in the arena. Its `authority_profile` re-grants the delegation as "₹6,000, `vpa_electricity_board@upi` only" for the duration of the round, the same pattern `RAIL_SCOPE_VIOLATION`, `PER_TX_BREACH`, and `LAPSED_MANDATE` already used for their own dimensions, so the demonstration always runs against the grant it was designed to break, never an implied one.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -115,7 +115,7 @@ This event fires on **every** transaction, not only on a violation — `ALLOW` i
 🧒 **Like you're five**
 You ask a helper to pay the electricity bill. The helper looks up the address in
 a phone book. If somebody slipped a fake page into the phone book with a very
-similar name on it, the helper posts the money to the wrong place — and the
+similar name on it, the helper posts the money to the wrong place, and the
 helper did nothing careless. It read the book correctly.
 
 🏪 **In real life**
@@ -129,7 +129,7 @@ An earlier revision of `BENEFICIARY_DRIFT` hardcoded the wrong VPA as a string
 literal and asked the reader to imagine a poisoned lookup. Adversarial review
 called that out precisely:
 
-> "It has no mechanism — the 'spoofed lookup' is narrated in the docstring and
+> "It has no mechanism, the 'spoofed lookup' is narrated in the docstring and
 > implemented as a different string literal, so nothing about how the agent got
 > the wrong VPA is modelled."
 
@@ -140,7 +140,7 @@ have got a shrug.
 ### The directory
 
 `backend/app/dtl/beneficiary_directory.py` is the lookup. It answers the question
-an agent tool actually asks — "what VPA should I pay for `<name>`?" — and every
+an agent tool actually asks, "what VPA should I pay for `<name>`?", and every
 record carries an **attestor** and a digest:
 
 ```python
@@ -157,8 +157,8 @@ This is the same **trust inversion** the SKU catalogue (LEARN_21) makes for
 belongs to the State Electricity Board" must not rest with whoever is asking to
 be paid.
 
-An unattested record still resolves — refusing to pay anyone unlisted would
-break ordinary commerce — but it resolves as **UNATTESTED**, and that fact
+An unattested record still resolves. Refusing to pay anyone unlisted would
+break ordinary commerce, but it resolves as **UNATTESTED**, and that fact
 reaches the proof object instead of being lost.
 
 ### The attack, which is now boring in the right way
@@ -195,15 +195,15 @@ def test_without_the_injection_the_diverted_leg_would_be_in_scope(self):
 
 Take the injection away, re-resolve, and the **same transaction shape stops being
 a violation**. That is what separates a modelled mechanism from a hardcoded
-outcome, and it is the specific charge — that the generator hands the defence its
-own answer — that the rest of this repository had to answer elsewhere too
+outcome, and it is the specific charge. That the generator hands the defence its
+own answer. That the rest of this repository had to answer elsewhere too
 (see LEARN_22).
 
 ### What this does not claim
 
 Not a real biller registry. Not NPCI's. Not connected to anything. It is a small
 in-memory model whose only job is to make the causal chain of a substitution
-attack **inspectable** rather than narrated — and `classify_beneficiary()` exists
+attack **inspectable** rather than narrated, and `classify_beneficiary()` exists
 so a proof can say the diverted payee was *in the agent's own directory but
 unattested*, which is a stronger and more uncomfortable finding than "unknown
 payee".
@@ -221,13 +221,13 @@ payee".
 <summary>Answers</summary>
 
 1. Because it is a *scope* question (who may receive money) like rail and merchant, and scope is deliberately checked before the economic-substance (PURPOSE) and aggregate (AMOUNT) checks.
-2. It means unconstrained — any beneficiary is allowed — matching `permitted_mccs`'s existing convention, so grants that never state a beneficiary behave exactly as they did before the dimension was added.
-3. No — like `RAIL_SCOPE_BLOCK`, it refuses the transaction while consuming zero headroom, so authorised beneficiaries stay fully payable.
-4. The invariant engine performs the deterministic pass/fail arithmetic per dimension; the Intent Firewall reshapes those SAME results into a single cross-dimension view and verdict — it invents no new check.
-5. The cost governor had no dedicated `INV_07` branch, so a beneficiary violation silently fell through to the generic quarantine message and never set `active_policy` — invisible to `invariant_engine.py`'s own tests because they test the invariant firing, not what the cost governor does with it afterward.
+2. It means unconstrained, any beneficiary is allowed, matching `permitted_mccs`'s existing convention, so grants that never state a beneficiary behave exactly as they did before the dimension was added.
+3. No, like `RAIL_SCOPE_BLOCK`, it refuses the transaction while consuming zero headroom, so authorised beneficiaries stay fully payable.
+4. The invariant engine performs the deterministic pass/fail arithmetic per dimension; the Intent Firewall reshapes those SAME results into a single cross-dimension view and verdict. It invents no new check.
+5. The cost governor had no dedicated `INV_07` branch, so a beneficiary violation silently fell through to the generic quarantine message and never set `active_policy`, invisible to `invariant_engine.py`'s own tests because they test the invariant firing, not what the cost governor does with it afterward.
 </details>
 
 ---
 
 ## Where to go next
-→ [LEARN_17 — The Deception Lab](LEARN_17_DECEPTION_LAB.md)
+→ [LEARN_17. The Deception Lab](LEARN_17_DECEPTION_LAB.md)

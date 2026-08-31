@@ -1,4 +1,4 @@
-# LEARN_02 — Tech Stack
+# LEARN_02: Tech Stack
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md)  
 > **You will be able to:**
@@ -43,7 +43,7 @@ The backend is built in Python to combine high-speed asynchronous web handling w
 | `lightgbm` | $\ge 4.0$ | First fallback gradient booster | `backend/app/detector/model.py:73` | Falls back to `sklearn_hgb` |
 | `shap` | $\ge 0.44$ | Exact Shapley feature attribution | `backend/app/detector/explainability.py:43` | `model_feature_contribution` |
 | `dilithium-py`| $\ge 1.0$ | Pure-Python NIST FIPS 204 ML-DSA-44 post-quantum signatures | `backend/app/crypto/pqc_provider.py:55` | Raises `PQCUnavailableError` |
-| `networkx` | $\ge 3.0$ | Payment Graph Sentinel: PageRank, betweenness, Louvain community detection | `backend/app/graph_sentinel/graph_builder.py` | None (no fallback; graph_* features default to 0.0 if absent — see [LEARN_19](LEARN_19_GRAPH_SENTINEL.md)) |
+| `networkx` | $\ge 3.0$ | Payment Graph Sentinel: PageRank, betweenness, Louvain community detection | `backend/app/graph_sentinel/graph_builder.py` | None (no fallback; graph_* features default to 0.0 if absent, see [LEARN_19](LEARN_19_GRAPH_SENTINEL.md)) |
 | `scipy` | $\ge 1.11$ | Kolmogorov-Smirnov & Jensen-Shannon statistical tests | `backend/app/fidelity/ks_test.py:11` | None (fidelity analysis) |
 | `matplotlib` | $\ge 3.8$ | Headless figure rendering (PR/ROC curves) | `backend/app/detector/train.py:270` | Text/JSON metric exports |
 | `joblib` | $\ge 1.3$ | Atomic serialization of pipeline models and calibrators | `backend/app/detector/train.py:247` | JSON weights representation |
@@ -200,4 +200,4 @@ Understanding why certain enterprise technologies were **not** used is critical 
 ---
 
 ## Where to go next
-→ [LEARN_03 — Map of the Codebase](LEARN_03_MAP_OF_THE_CODEBASE.md)
+→ [LEARN_03. Map of the Codebase](LEARN_03_MAP_OF_THE_CODEBASE.md)

@@ -1,21 +1,21 @@
-# FORSETI — Every Feature Explained
+# FORSETI: Every Feature Explained
 
 Each feature below is explained three times:
 
-- 🧒 **Like you're five** — the idea with no jargon at all.
-- 🏪 **In real life** — a concrete situation where this actually bites.
-- 🎓 **Properly** — the technical mechanism, and what is measured.
+- 🧒 **Like you're five**, the idea with no jargon at all.
+- 🏪 **In real life**, a concrete situation where this actually bites.
+- 🎓 **Properly**, the technical mechanism, and what is measured.
 
 ---
 
-# Part 1 — The Core System
+# Part 1: The Core System
 
 ## 1.1 The Delegation-Trust Ledger (DTL)
 
 🧒 **Like you're five**
 Mum gives you ₹100 and says "buy sweets". You have three pockets. You spend ₹40
 from the left pocket, ₹40 from the right pocket, and ₹40 from your back pocket.
-Each pocket says "that's fine, I had enough!" But you spent ₹120 — more than Mum
+Each pocket says "that's fine, I had enough!" But you spent ₹120. More than Mum
 gave you. The DTL is the grown-up who adds up **all three pockets**.
 
 🏪 **In real life**
@@ -90,7 +90,7 @@ and quarantines the ₹1,500.
 🎓 **Properly**
 A seven-level graduated ladder: `ALLOW → STEP_UP → PARTIAL_AUTH → QUARANTINE →
 CAPABILITY_REDUCTION → REVIEW → BLOCK`. Blocking is the last resort because
-blocking is itself an attack surface — flood revocations and you can force a
+blocking is itself an attack surface. Flood revocations and you can force a
 denial of service on the legitimate customer. Implementation:
 `app/dtl/cost_governor.py`.
 
@@ -108,7 +108,7 @@ fine but whose basket is odd, or spending at 3am when you always shop on Sundays
 
 🎓 **Properly**
 XGBoost gradient-boosted trees over **37 features** in six groups (raw
-transaction, delegation, cross-rail, semantic, security, graph — the last
+transaction, delegation, cross-rail, semantic, security, graph, the last
 from Payment Graph Sentinel's cross-authority entity graph). Trained on a
 chronological 70/15/15 split with **two attack families withheld entirely**, then
 calibrated with isotonic regression on the validation slice.
@@ -132,13 +132,14 @@ the 0.000 an earlier revision of this document reported.
 
 🧒 **Like you're five**
 A robot that only ever looks at *one pocket at a time* can never catch the
-three-pocket trick — not because it's a bad robot, but because the answer isn't
+three-pocket trick, not because it's a bad robot, but because the answer isn't
 in any single pocket. Show it the total and it catches it. The boring adding-up
 grown-up catches it without being shown anything at all.
 
 🏪 **In real life**
 One ₹4,000 grocery payment is *genuinely* ordinary. The information that makes it
-an attack does not exist inside that transaction — it exists in the aggregate
+an attack is not recoverable from that transaction alone. The rail sees the payment
+but not the cross-rail authority context needed to establish a violation, which lives in the aggregate
 across rails. So the question is not "is the model good enough?", it is
 "does anything in the system hold the aggregate?"
 
@@ -154,7 +155,7 @@ With `CROSS_RAIL_SPLIT` withheld from training and tested on the unseen slice
 | Hybrid ML **+ DTL aggregate features** | **0.828** | 0.844 |
 | **Deterministic DTL invariant** | **0.844** | 0.844 |
 
-Models without a cross-rail view stay at 0.17–0.56 *however much data they get* —
+Models without a cross-rail view stay at 0.17–0.56 *however much data they get*,
 that is the structural finding. Models given the DTL's aggregate features reach
 0.828 on a family they have never seen. The invariant reaches 0.844 having seen
 nothing, because it is arithmetic over the grant rather than a learned threshold.
@@ -166,7 +167,7 @@ detector only works once something computes the aggregate for it.
 
 <!--claims-ok--> (post-mortem: quoting the retracted claim is the point)
 > An earlier revision of this section reported 0.000 recall for every learned
-> model. That was a leak in our own generator, not a property of ML — see
+> model. That was a leak in our own generator, not a property of ML, see
 > [`LEARN_22_THE_LEAK.md`](LEARN_22_THE_LEAK.md).
 
 ---
@@ -185,7 +186,7 @@ because signatures harvested today must still be unforgeable in fifteen years.
 🎓 **Properly**
 Genuine **NIST FIPS 204 ML-DSA-44** (via `dilithium-py`; correct 1312-byte public
 key / 2560-byte secret key / 2420-byte signature). The event log is SHA-256
-hash-chained, and the signature commits to the **real chain head** — not a
+hash-chained, and the signature commits to the **real chain head**, not a
 placeholder. Four integrity cases run live: untouched verifies; mutated amount
 fails; flipped signature byte fails; wrong key fails.
 
@@ -207,7 +208,7 @@ exact sequence at original speed rather than reconstructing it from fragments.
 🎓 **Properly**
 Every backend action emits a structured event that is simultaneously (a) logged,
 (b) appended to a hash-chained JSONL file, and (c) broadcast over WebSocket. The
-dashboard holds **no independent state** — which is why the animation cannot
+dashboard holds **no independent state**. Which is why the animation cannot
 disagree with the engine. `/api/arena/verify-log` recomputes the chain and
 pinpoints the exact index of any tampering.
 
@@ -235,12 +236,12 @@ table is exposed in the UI, so the pivot is explainable rather than asserted.
 
 ---
 
-# Part 2 — The AI Agent Layer
+# Part 2: The AI Agent Layer
 
 > **The rule that makes this safe:** the LLM **never enforces**. It explains,
 > translates and proposes. Every proposal is schema-validated and re-checked by
 > the deterministic engine before it can affect anything. Pull the API keys and
-> the security system works exactly as before — only the explanations go away.
+> the security system works exactly as before, only the explanations go away.
 
 Provider chain: 10 providers, 60 keys, tier-ordered fallback. Out-of-quota is a
 normal event, not an error. With nothing reachable, every agent reports
@@ -257,12 +258,12 @@ the robot cannot bend.
 🏪 **In real life**
 You say *"groceries and household basics, ₹10,000 a week, nothing resellable."*
 Today that becomes a spend limit and a category list, and everything else you
-meant is thrown away. "Nothing resellable" — the most important part — is lost.
+meant is thrown away. "Nothing resellable", the most important part, is lost.
 
 🎓 **Properly**
 Compiles natural language into a policy object: ceiling, per-transaction cap,
 permitted MCCs, semantic exclusions, permitted rails, TTL window. **Every MCC and
-exclusion tag is validated against the engine's vocabulary** — a hallucinated
+exclusion tag is validated against the engine's vocabulary**, a hallucinated
 category is dropped and reported in `dropped_by_validator`, because a hallucinated
 code would silently *widen* the policy. The agent also lists the ambiguities it had
 to resolve, and resolves them narrowly.
@@ -322,8 +323,8 @@ Your defence is graded against the six attacks your team imagined. The real
 adversary has no such limit.
 
 🎓 **Properly**
-Reads the observed defence history and proposes attack *parameters* — leg amounts,
-rails, merchant category — with a stated hypothesis about which weakness it probes.
+Reads the observed defence history and proposes attack *parameters*. Leg amounts,
+rails, merchant category, with a stated hypothesis about which weakness it probes.
 The **simulator executes and judges**; the model never decides an outcome.
 Hard sandbox bound: any proposal above 5× the grant is scaled down.
 
@@ -340,7 +341,7 @@ spends hours per incident reconstructing a timeline from raw logs.
 
 🎓 **Properly**
 Drafts title, severity, executive summary, timeline, root cause, controls that
-fired *and did not fire*, customer impact, and recommended actions — from the real
+fired *and did not fire*, customer impact, and recommended actions, from the real
 event timeline. Instructed to write "not established" rather than speculate where
 evidence is absent.
 
@@ -350,7 +351,7 @@ evidence is absent.
 
 🧒 **Like you're five**
 After something goes wrong, it suggests the *smallest* new rule that would have
-stopped it — instead of banning everything.
+stopped it, instead of banning everything.
 
 🏪 **In real life**
 The reflex after an incident is "tighten everything." Six months later approval
@@ -378,7 +379,7 @@ payments faster than the fraud does.
 
 🎓 **Properly**
 Generates SMS, in-app and email copy under 130 words. Explicitly instructed never
-to blame the customer, and to state what still went through — with a `tone_check`
+to blame the customer, and to state what still went through, with a `tone_check`
 field the model must fill.
 
 ---
@@ -396,7 +397,7 @@ obligation we already carry."
 Maps a control to RBI / NPCI / PCI DSS / FIU-IND / NIST / BIS obligations, marked
 `DIRECT | SUPPORTING | TANGENTIAL`, and **lists the gaps it does not satisfy**.
 Instructed to omit clause numbers it is unsure of rather than guess, and every
-result carries a verification caveat — clause numbers are exactly where models
+result carries a verification caveat. Clause numbers are exactly where models
 hallucinate.
 
 ---
@@ -408,7 +409,7 @@ Checks if a shop that says "I sell food" actually sells mostly gift cards.
 
 🏪 **In real life**
 MCC is **self-declared** and rarely re-checked. An attacker shops for merchants
-whose declared category is cleaner than their real inventory — that's a compliant-
+whose declared category is cleaner than their real inventory, that's a compliant-
 looking route to liquid value.
 
 🎓 **Properly**
@@ -423,7 +424,7 @@ stored-value exposure, and recommends `ALLOW | MONITOR | REVIEW | RESTRICT`.
 ## 2.10 Counterfactual Analyst
 
 🧒 **Like you're five**
-Asks "what if Mum had only given ₹3,000?" — and then *actually tries it* instead
+Asks "what if Mum had only given ₹3,000?", and then *actually tries it* instead
 of guessing.
 
 🏪 **In real life**
@@ -452,7 +453,7 @@ During a live incident nobody can write a query language. They need to type
 🎓 **Properly**
 The LLM compiles the question into a **structured filter**; the engine runs it over
 the real log. The model never answers from memory. Literal search terms are
-applied as a *soft* narrowing — models like to add a word like "objection" that
+applied as a *soft* narrowing. Models like to add a word like "objection" that
 never appears verbatim, which would silently zero an otherwise correct filter; if
 the term matches nothing it is dropped and the UI says so.
 
@@ -463,7 +464,7 @@ the term matches nothing it is dropped and the UI says so.
 ## 2.12 Model Card Generator
 
 🧒 **Like you're five**
-Writes the honest report card for the guessing robot — including what it's bad at.
+Writes the honest report card for the guessing robot, including what it's bad at.
 
 🏪 **In real life**
 Model documentation is a regulatory expectation and always the last thing written,
@@ -472,12 +473,12 @@ usually by someone motivated to make the model look good.
 🎓 **Properly**
 Generates intended use, out-of-scope uses, evaluation summary, known weaknesses,
 fairness considerations and monitoring recommendations **from the real artifacts**.
-The validator **rejects any card with no stated weaknesses** — a model card that
+The validator **rejects any card with no stated weaknesses**, a model card that
 hides weakness is worse than none.
 
 ---
 
-# Part 3 — Using It
+# Part 3: Using It
 
 ## Controls in the Live Arena
 
@@ -485,7 +486,7 @@ hides weakness is worse than none.
 |---|---|
 | **Delegated limit + Apply** | Sets the ceiling. Try ₹20,000 (attack succeeds) vs ₹5,000 (fires earlier). |
 | **Vector checkboxes / Select all** | Pick any subset. Selecting several runs a **campaign** back-to-back, which is how you see the Red agent adapt between rounds. |
-| **DTL defense toggle** | OFF = today's world. Run it both ways — most persuasive 30 seconds in the demo. |
+| **DTL defense toggle** | OFF = today's world. Run it both ways. Most persuasive 30 seconds in the demo. |
 | **Speed 0.25× / 0.5× / 1× / 2×** | 0.25× is for narrating to an audience. |
 | **Execute / Reset** | Runs for real; reset returns to a fresh grant. |
 | **Any log line** | Click to open the four-part explanation. |
@@ -511,10 +512,10 @@ python tasks.py frontend    # dashboard on :3005
    claim it. The with-feature vs without-feature separation is far wider than the
    intervals and does hold.
 4. **The invariant alone has a 15.8% FPR** (`false_positive_rate: 0.15761` in
-   `artifacts/evaluation/baselines.json`) — driven by legitimate in-scope gift-card
+   `artifacts/evaluation/baselines.json`). Driven by legitimate in-scope gift-card
    baskets. A membership-and-arithmetic check has no notion of degree, so this is the
    cost of holdout-independence, and it is precisely why the cost governor exists.
-5. **`delegation_fanout_count` is constant** at 3 — every authority has exactly
+5. **`delegation_fanout_count` is constant** at 3, every authority has exactly
    three rail delegations in this model. Structural, not hardcoded.
 6. **LLM output is advisory and unverified.** Regulatory citations especially must
    be checked by counsel.

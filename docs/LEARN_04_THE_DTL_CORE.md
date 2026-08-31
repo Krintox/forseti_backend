@@ -1,4 +1,4 @@
-# LEARN_04 — The DTL Core
+# LEARN_04: The DTL Core
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md), [LEARN_03](LEARN_03_MAP_OF_THE_CODEBASE.md)  
 > **You will be able to:**
@@ -22,7 +22,7 @@ In autonomous commerce, an AI agent is issued payment credentials across multipl
 🎓 **Properly**  
 The DTL decouples delegated authority verification from rail-specific settlement networks. It maintains a canonical authority state `DTLGlobalAuthorityState` (`backend/app/models/state.py:45`) and applies six deterministic predicates implemented in `DTLInvariantEngine` (`backend/app/dtl/invariant_engine.py:38`). When a predicate fails, it emits a structured `SemanticDriftProof` (`backend/app/models/proofs.py:10`), and routes the transaction to `AdversarialCostGovernor` (`backend/app/dtl/cost_governor.py:30`) for graduated containment.
 
-> **A 7th dimension was added after this chapter was first written.** The Agentic Payment Security Runtime expansion added `BENEFICIARY` — *who the money settles to*, independent of amount, rail, or merchant category — alongside the six covered here, with its own invariant `INV_07_UNAUTHORIZED_BENEFICIARY` in the SAME registry this chapter describes. Nothing below about the original six changed to make room for it. Full treatment in [LEARN_16 — The Agent Intent Firewall](LEARN_16_INTENT_FIREWALL.md).
+> **A 7th dimension was added after this chapter was first written.** The Agentic Payment Security Runtime expansion added `BENEFICIARY`, *who the money settles to*, independent of amount, rail, or merchant category. Alongside the six covered here, with its own invariant `INV_07_UNAUTHORIZED_BENEFICIARY` in the SAME registry this chapter describes. Nothing below about the original six changed to make room for it. Full treatment in [LEARN_16. The Agent Intent Firewall](LEARN_16_INTENT_FIREWALL.md).
 
 ---
 
@@ -88,8 +88,8 @@ def authority_headroom(self) -> float:
 ## 3. The Six Invariants & Order of Execution
 
 > **These six are where the design started, not where it ended.** The live engine
-> evaluates **seven** authority invariants — BENEFICIARY (`INV_07`) is added in
-> [LEARN_16](LEARN_16_INTENT_FIREWALL.md) — preceded by `INV_08_MANDATE_SUSPENDED`,
+> evaluates **seven** authority invariants. BENEFICIARY (`INV_07`) is added in
+> [LEARN_16](LEARN_16_INTENT_FIREWALL.md), preceded by `INV_08_MANDATE_SUSPENDED`,
 > which is a *policy state* rather than a dimension of the grant and is covered in
 > [LEARN_20](LEARN_20_ADAPTIVE_IMMUNE_SYSTEM.md). This chapter builds the six that
 > make the argument; the other two are additive and neither changes the order below.
@@ -293,4 +293,4 @@ The **Adversarial Cost Governor** (`backend/app/dtl/cost_governor.py:30`) solves
 ---
 
 ## Where to go next
-→ [LEARN_05 — Attacks and Simulator](LEARN_05_ATTACKS_AND_SIMULATOR.md)
+→ [LEARN_05. Attacks and Simulator](LEARN_05_ATTACKS_AND_SIMULATOR.md)

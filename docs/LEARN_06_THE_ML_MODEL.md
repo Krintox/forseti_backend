@@ -1,4 +1,4 @@
-# LEARN_06 — The Machine Learning Detector
+# LEARN_06: The Machine Learning Detector
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md), [LEARN_04](LEARN_04_THE_DTL_CORE.md)  
 > **You will be able to:**
@@ -27,12 +27,12 @@ In financial payment processing, transaction data arrives as a tabular stream. O
 
 ## 2. The 37 Features Group by Group
 
-The machine learning detector extracts exactly **37 features across 6 functional groups** (`backend/app/detector/feature_schema.py:10`) — the original 29 across 5 groups, plus an 8-feature `graph` group added by Payment Graph Sentinel. Full treatment of the graph group, including a real methodology bug it introduced and how the numbers themselves caught it, is in [LEARN_19 — Graph Sentinel](LEARN_19_GRAPH_SENTINEL.md); this section keeps the original 5 groups as first written.
+The machine learning detector extracts exactly **37 features across 6 functional groups** (`backend/app/detector/feature_schema.py:10`), the original 29 across 5 groups, plus an 8-feature `graph` group added by Payment Graph Sentinel. Full treatment of the graph group, including a real methodology bug it introduced and how the numbers themselves caught it, is in [LEARN_19, Graph Sentinel](LEARN_19_GRAPH_SENTINEL.md); this section keeps the original 5 groups as first written.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                THE ORIGINAL 29 DETECTOR FEATURES (5 groups)            │
-│         (+ an 8-feature "graph" 6th group — see LEARN_19)              │
+│         (+ an 8-feature "graph" 6th group. See LEARN_19)              │
 ├───────────────────┬────────────────────────────────────────────────────┤
 │ Feature Group     │ Feature Names & Descriptions                       │
 ├───────────────────┼────────────────────────────────────────────────────┤
@@ -165,7 +165,7 @@ Raw GBDT margin outputs are distorted under extreme class imbalance. FORSETI fit
 
 ---
 
-## 6. Baselines Benchmark — and the negative result that turned out to be a bug
+## 6. Baselines Benchmark: and the negative result that turned out to be a bug
 
 The baseline harness evaluates five architectures on the identical test slice
 (`artifacts/evaluation/baselines.json`), under two conditions: with the cross-rail family
@@ -213,13 +213,13 @@ may honestly be claimed:
   2 and 3 reach 0.1719 against row 4's 0.8281, and those intervals do not come close to
   overlapping. One ₹4,000 leg genuinely looks like ordinary grocery spending, and no amount of
   training data supplies a feature the model was never given.
-- **Give a model the aggregate and it can — on this run.** Row 4's `exposure_after_tx_ratio`
+- **Give a model the aggregate and it can, on this run.** Row 4's `exposure_after_tx_ratio`
   is its #1 SHAP driver, so it is using the mechanism rather than a fingerprint. But held-out
   0.8281 against seen 0.8438 is a gap of 0.0157, and n=64 **cannot resolve it**. We do not
   claim the classifier generalises to an unseen family. We claim this run did not catch it
   failing to, which is weaker and is what the data says.
 - **The invariant's two columns are identical, and that is an identity rather than a
-  measurement.** 0.8438 held out, 0.8438 seen — not because the run came out even, but
+  measurement.** 0.8438 held out, 0.8438 seen, not because the run came out even, but
   because the check is arithmetic over the grant (₹4,000 + ₹4,000 + ₹4,000 > ₹10,000) and has
   no fitted parameter that a change of training data could move.
 
@@ -231,7 +231,7 @@ one run with one seed.
 
 The invariant alone runs a **15.76% false-positive rate** on this slice. That is the cost of a
 membership-and-arithmetic check with no notion of degree, and it is why the architecture pairs
-it with the Adversarial Cost Governor — proportionate containment, partial authorisation —
+it with the Adversarial Cost Governor, proportionate containment, partial authorisation, 
 rather than blanket blocking. A deterministic check that is holdout-independent AND
 low-false-positive is not on offer here, and claiming otherwise would be the third thing in
 this chapter that turned out to be too good to be true.
@@ -240,7 +240,7 @@ this chapter that turned out to be too good to be true.
 
 ## 7. Feature-Group Ablation Study (Original 6 Variants)
 
-> This section describes the ablation study as originally built, on the 29-feature/5-group schema. Two more variants (`H: raw+DTL`, `I: raw+DTL+graph`) and a `measured_graph_feature_lift` figure were added when the `graph` group shipped — see [LEARN_19 §4](LEARN_19_GRAPH_SENTINEL.md#4-the-extended-ablation-raw--rawdtl--rawdtlgraph--full-hybrid) for the full 9-variant table and the current numbers (the PR-AUC figures below predate the graph-feature retrain and are kept here for the ablation METHODOLOGY, not as current headline numbers).
+> This section describes the ablation study as originally built, on the 29-feature/5-group schema. Two more variants (`H: raw+DTL`, `I: raw+DTL+graph`) and a `measured_graph_feature_lift` figure were added when the `graph` group shipped, see [LEARN_19 §4](LEARN_19_GRAPH_SENTINEL.md#4-the-extended-ablation-raw--rawdtl--rawdtlgraph--full-hybrid) for the full 9-variant table and the current numbers (the PR-AUC figures below predate the graph-feature retrain and are kept here for the ablation METHODOLOGY, not as current headline numbers).
 
 
 The ablation study retrains six variants of the detector on systematic feature subsets (`artifacts/evaluation/ablation_results.json`):
@@ -292,4 +292,4 @@ As designed in the anti-circularity protocol, semantic features (`semantic_drift
 ---
 
 ## Where to go next
-→ [LEARN_07 — Arena and Events](LEARN_07_ARENA_AND_EVENTS.md)
+→ [LEARN_07. Arena and Events](LEARN_07_ARENA_AND_EVENTS.md)

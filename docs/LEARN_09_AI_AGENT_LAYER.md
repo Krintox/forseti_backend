@@ -1,4 +1,4 @@
-# LEARN_09 — The AI Advisory Agent Layer
+# LEARN_09: The AI Advisory Agent Layer
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md), [LEARN_04](LEARN_04_THE_DTL_CORE.md), [LEARN_07](LEARN_07_ARENA_AND_EVENTS.md)  
 > **You will be able to:**
@@ -131,7 +131,7 @@ Every one of the 12 AI agents wraps its output in a standardized envelope (`back
 #### 5. Incident Report Writer (`incident_report`, `ai/agents.py:490`)
 - **Problem:** Writing compliance reports following an intercepted breach is labor-intensive.
 - **Solution:** Generates an audit-ready incident report from the actual event log timeline, explicitly marking missing facts as "Not Established".
-- **`deterministic_appendix` (Agentic Security Runtime expansion):** Every response now carries a small block of cross-module facts — kill-chain stage/score (LEARN_18), Intent Firewall hard-drift count (LEARN_16), Deception Lab detection count (LEARN_17) — attached **unconditionally**, computed directly from the round result, never from the model. It is present even when `status: "LLM_UNAVAILABLE"`, because an incident report's FACTS must not depend on whether a language model answered; only its narrative prose should. See §5 below for a real UI bug this property exposed.
+- **`deterministic_appendix` (Agentic Security Runtime expansion):** Every response now carries a small block of cross-module facts, kill-chain stage/score (LEARN_18), Intent Firewall hard-drift count (LEARN_16), Deception Lab detection count (LEARN_17), attached **unconditionally**, computed directly from the round result, never from the model. It is present even when `status: "LLM_UNAVAILABLE"`, because an incident report's FACTS must not depend on whether a language model answered; only its narrative prose should. See §5 below for a real UI bug this property exposed.
 
 #### 6. Policy Advisor (`policy_advisor`, `ai/agents.py:590`)
 - **Problem:** After an incident, human operators reflexively over-tighten limits, hurting legitimate conversion.
@@ -152,7 +152,7 @@ Every one of the 12 AI agents wraps its output in a standardized envelope (`back
 #### 10. Counterfactual Analyst (`counterfactual_analyst`, `ai/agents.py:930`)
 - **Problem:** "Would a ₹2,500 per-transaction cap have stopped this attack?" is usually answered with guesswork.
 - **Solution:** The LLM proposes counterfactual limits; **the system re-runs the real simulator with those limits** and reports the actual outcome (`ai/routes.py`).
-- **RAIL and PURPOSE dimensions (Agentic Security Runtime expansion):** Originally AMOUNT-only ("what ceiling would have stopped this"), the agent can now also propose "what if the card rail had been disabled" (RAIL) or "what if gift cards had been permitted" (PURPOSE) — replayed the same way, in an isolated `orchestrator.sandbox()`, with the mutation read back from the ACTUAL replayed grant (`permitted_rails_tested`, `semantic_exclusions_tested`) rather than merely echoed from the request. **Dimension-gated for honesty:** a round whose strategy runs against a FIXED authority profile (`RAIL_SCOPE_VIOLATION`, `PER_TX_BREACH`, `LAPSED_MANDATE`, `BENEFICIARY_DRIFT`, `CONSTRAINT_EROSION`) only ever offers AMOUNT — proposing RAIL/PURPOSE there would be silently overwritten by that vector's own fixed profile at replay time and misrepresent what was actually tested.
+- **RAIL and PURPOSE dimensions (Agentic Security Runtime expansion):** Originally AMOUNT-only ("what ceiling would have stopped this"), the agent can now also propose "what if the card rail had been disabled" (RAIL) or "what if gift cards had been permitted" (PURPOSE), replayed the same way, in an isolated `orchestrator.sandbox()`, with the mutation read back from the ACTUAL replayed grant (`permitted_rails_tested`, `semantic_exclusions_tested`) rather than merely echoed from the request. **Dimension-gated for honesty:** a round whose strategy runs against a FIXED authority profile (`RAIL_SCOPE_VIOLATION`, `PER_TX_BREACH`, `LAPSED_MANDATE`, `BENEFICIARY_DRIFT`, `CONSTRAINT_EROSION`) only ever offers AMOUNT, proposing RAIL/PURPOSE there would be silently overwritten by that vector's own fixed profile at replay time and misrepresent what was actually tested.
 
 #### 11. Log Copilot (`log_copilot`, `ai/agents.py:1000`)
 - **Problem:** Querying JSONL logs during live incidents requires syntax knowledge.
@@ -189,7 +189,7 @@ Every one of the 12 AI agents wraps its output in a standardized envelope (`back
 
 ## 5. A Real Frontend Bug the `deterministic_appendix` Design Exposed
 
-Wiring the incident report's `deterministic_appendix` into `frontend/app/ai/page.tsx` surfaced a genuine gap: the generic `AgentCard` component only rendered `ResultBody` (and therefore the appendix) when `result.result` was truthy — which is **exactly false** in the `LLM_UNAVAILABLE` case the appendix exists to cover. The one guarantee the backend had just built ("facts survive even without an LLM") was silently defeated by the frontend's own render guard. Fixed with a fallback render path in `AgentCard` itself (`frontend/app/ai/page.tsx`), and verified live in BOTH states — this session's environment turned out to have live LLM keys configured after all, so both the normal `ResultBody` path and the fallback path were exercised and confirmed correct through an actual browser session, not merely assumed from reading the two code paths.
+Wiring the incident report's `deterministic_appendix` into `frontend/app/ai/page.tsx` surfaced a genuine gap: the generic `AgentCard` component only rendered `ResultBody` (and therefore the appendix) when `result.result` was truthy, which is **exactly false** in the `LLM_UNAVAILABLE` case the appendix exists to cover. The one guarantee the backend had just built ("facts survive even without an LLM") was silently defeated by the frontend's own render guard. Fixed with a fallback render path in `AgentCard` itself (`frontend/app/ai/page.tsx`), and verified live in BOTH states, this session's environment turned out to have live LLM keys configured after all, so both the normal `ResultBody` path and the fallback path were exercised and confirmed correct through an actual browser session, not merely assumed from reading the two code paths.
 
 ---
 
@@ -216,4 +216,4 @@ Wiring the incident report's `deterministic_appendix` into `frontend/app/ai/page
 ---
 
 ## Where to go next
-→ [LEARN_10 — Frontend](LEARN_10_FRONTEND.md)
+→ [LEARN_10. Frontend](LEARN_10_FRONTEND.md)

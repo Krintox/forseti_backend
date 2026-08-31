@@ -1,4 +1,4 @@
-# FORSETI — Complete Walkthrough
+# FORSETI: Complete Walkthrough
 
 **Every page. Every button. What happens in the backend when you press it.**
 
@@ -14,7 +14,7 @@ You hire a robot assistant to buy groceries. You tell it:
 
 That is a *delegation*. The robot now holds some of your spending authority.
 
-Here is the problem. Your money can leave your account through several different **rails** —
+Here is the problem. Your money can leave your account through several different **rails**,
 different roads a payment can travel:
 
 - the **card** rail (your debit/credit card)
@@ -45,7 +45,7 @@ UPI  ₹4,000  ─┼──►  FORSETI adds them up: ₹12,000
 AP2  ₹4,000  ─┘                              vs
                               your limit:  ₹10,000
                                               ↓
-                                    ₹2,000 OVER — STOP
+                                    ₹2,000 OVER. STOP
 ```
 
 **One sentence:** *ordinary systems check each transaction; FORSETI checks whether the agent is
@@ -58,11 +58,11 @@ still inside the authority you gave it, across everything at once.*
 Two processes. Two terminals.
 
 ```bash
-# Terminal 1 — the brain (API + engine)
+# Terminal 1: the brain (API + engine)
 cd backend
 python -m uvicorn app.main:app --port 8000 --host 0.0.0.0
 
-# Terminal 2 — the dashboard
+# Terminal 2: the dashboard
 cd frontend
 npm run dev -- -p 3005
 ```
@@ -89,9 +89,9 @@ You will see, in order:
 |---|---|---|
 | ~0.5s | “PLANNING CROSS RAIL SPLIT: Rs 12,000 across 3 rail(s)” | Red agent selected its vector and target rails |
 | ~1.3s | “STEP 1: SENDING Rs 4,000 VIA CARD” | Built transaction 1 |
-| ~2.2s | “LOCALLY APPROVED — LOOKS NORMAL”, card tile turns blue, shows ₹4,000 | Card adapter checked *its own* limit and approved |
+| ~2.2s | “LOCALLY APPROVED. LOOKS NORMAL”, card tile turns blue, shows ₹4,000 | Card adapter checked *its own* limit and approved |
 | ~2.7s | “AGGREGATING ALL RAILS: Rs 4,000 / Rs 10,000” | DTL added it to the global total |
-| ~3.7s | “ML RISK 6.8%” | The trained XGBoost model scored it — **low, correctly** |
+| ~3.7s | “ML RISK 6.8%” | The trained XGBoost model scored it, **low, correctly** |
 | ~5.4s | UPI tile lights up, ₹4,000 | Second rail approved |
 | ~6.4s | “GLOBAL EXPOSURE Rs 8,000 / Rs 10,000” | Running total, meter turns amber |
 | ~8.5s | Agentic tile lights up, ₹4,000 | Third rail approved |
@@ -102,7 +102,7 @@ You will see, in order:
 | ~13.5s | “NEXT STRATEGY: INTENT LAUNDERING” | Red agent observed the block and picked a new plan |
 
 **The point to notice:** all three rails said ✅. The card tile, UPI tile and agentic tile all read
-“LOCALLY OK”. Only the box in the middle — FORSETI DTL — objected.
+“LOCALLY OK”. Only the box in the middle, FORSETI DTL, objected.
 
 **Also notice the ML risk score is only ~6.8%.** That is not a bug, and we do not hide it. A single
 ₹4,000 grocery payment genuinely looks innocent. No classifier can catch this from one transaction.
@@ -116,55 +116,55 @@ Arithmetic on the total catches it. That is the entire argument of the project.
 
 - **15 navigation entries**, grouped Command / Operations / Science / Governance. Every one leads
   to a real page.
-- **GLOBAL AUTHORITY panel** (bottom): live exposure vs ceiling with a colour bar —
+- **GLOBAL AUTHORITY panel** (bottom): live exposure vs ceiling with a colour bar,
   green under 80%, amber 80–99%, red at 100%+.
 - **Live stream dot**: green = connected to the event feed.
 - **MODEL OK / NO MODEL**: whether a trained model artifact is loaded.
 
 ---
 
-### Page 1 — Overview `/`
+### Page 1: Overview `/`
 
 The pitch page.
 
-- **Thesis panel** — the one-line contrast between traditional controls and FORSETI.
-- **Five stat cards** — global exposure, detector status, test PR-AUC, measured p99 latency, PQC
+- **Thesis panel**, the one-line contrast between traditional controls and FORSETI.
+- **Five stat cards**. Global exposure, detector status, test PR-AUC, measured p99 latency, PQC
   status. Any card reading `NOT RUN` means that pipeline hasn't been executed; it is never filled
   with a placeholder.
-- **Headline measured finding** — the cross-rail recall table. Read this one table if you read
+- **Headline measured finding**, the cross-rail recall table. Read this one table if you read
   nothing else.
-- **System health** — four live checks.
-- **Where to look** — shortcut cards into the other pages.
+- **System health**, four live checks.
+- **Where to look**. Shortcut cards into the other pages.
 
 *Backend:* `GET /api/health`, `/api/evaluation`, `/api/benchmark/latency`.
 
 ---
 
-### Page 2 — Live Arena `/arena` ⭐ the judging page
+### Page 2: Live Arena `/arena` ⭐ the judging page
 
-**Left column — DELEGATED AUTHORITY**
+**Left column. DELEGATED AUTHORITY**
 
 | Control | What it does |
 |---|---|
 | **Delegated limit (₹)** text box | The ceiling you grant the agent. Type any number. |
-| **APPLY** | `POST /api/arena/limit` — recomputes headroom instantly across every page |
+| **APPLY** | `POST /api/arena/limit`. Recomputes headroom instantly across every page |
 | **₹5,000 / ₹10,000 / ₹12,000 / ₹20,000** | Shortcut buttons that fill the box |
 | **Ceiling / Exposure / Headroom** | Live readout. Exposure and headroom animate as money moves |
 | Progress bar | % of authority consumed |
 
 > **Try this:** set the limit to **₹20,000**, press APPLY, then run the same attack. ₹12,000 now
 > fits inside ₹20,000, so **no violation fires** and the Red team wins. Set it to **₹5,000** and the
-> violation fires on the *second* rail instead of the third. The rule is arithmetic on your number —
+> violation fires on the *second* rail instead of the third. The rule is arithmetic on your number,
 > not a threshold we tuned.
 
-**Left column — LAUNCH ATTACK**
+**Left column. LAUNCH ATTACK**
 
 | Control | What it does |
 |---|---|
 | Six attack tiles | Choose the vector. Cross-Rail Split is the flagship |
 | **DTL defense** toggle | ON = FORSETI watches. **OFF = the legacy world** |
 | **Speed** 0.5x / 1x / 2x | Pacing of the event stream |
-| **EXECUTE ATTACK** | `POST /api/arena/round` — runs it for real |
+| **EXECUTE ATTACK** | `POST /api/arena/round`. Runs it for real |
 | **RESET** | Clears exposure and rail counters back to a fresh grant |
 
 > **Try this:** turn **DTL defense OFF** and attack. Every rail approves, exposure reaches ₹12,000
@@ -172,7 +172,7 @@ The pitch page.
 > world. Toggle it back ON and run again. Same attack, contained. This A/B is the most persuasive
 > 30 seconds in the demo.
 
-**Middle — LIVE ATTACK FLOW**
+**Middle. LIVE ATTACK FLOW**
 
 The animated diagram. Boxes are components; the glowing arrow shows what is moving *right now*, and
 the pill under the diagram spells it out in words. Rail tiles show the running amount each rail has
@@ -181,17 +181,17 @@ approved and a green “LOCALLY OK”. The DTL box shows `exposure / ceiling` li
 Below it, four explanation cards: why each rail said yes, what the DTL saw (with the formal
 invariant expression and the arithmetic), the detection score, and the containment action.
 
-**Right — LIVE BACKEND EVENT LOG**
+**Right. LIVE BACKEND EVENT LOG**
 
 Every backend event as a line, with a `+seconds` offset and the numbers behind it. Filter by
 All / Attack / Rails / DTL / ML / Defense / Audit. **Follow** auto-scrolls.
 
 *This log is the receipt.* Every animation you saw corresponds to a line here, and every line was
-emitted by the engine — not by the browser.
+emitted by the engine, not by the browser.
 
 ---
 
-### Page 3 — Attack Simulator `/simulator`
+### Page 3: Attack Simulator `/simulator`
 
 All **63 researched attack vectors**, each with a real-world citation.
 
@@ -204,29 +204,29 @@ All **63 researched attack vectors**, each with a real-world citation.
 
 ---
 
-### Page 4 — Defense Center `/defense`
+### Page 4: Defense Center `/defense`
 
 The seven invariants, each with its formal expression, what it catches, and how many times it has
 fired this session:
 
-- `INV_01_GLOBAL_BUDGET_EXCEEDED` — `settled + authorized + pending + reserved + new_tx <= ceiling`
-- `INV_02_SEMANTIC_INTENT_DRIFT` — `cart.items.category NOT IN semantic_exclusions`
-- `INV_03_UNAUTHORIZED_MCC` — `tx.merchant_mcc IN permitted_mccs`
-- `INV_04_UNAUTHORIZED_RAIL` — `tx.rail IN permitted_rails`
-- `INV_05_PER_TX_CAP_EXCEEDED` — `tx.amount <= per_transaction_cap`
-- `INV_06_AUTHORITY_EXPIRED` — `now <= delegation_created_at + validity_window_hours`
-- `INV_07_UNAUTHORIZED_BENEFICIARY` — `tx.vpa_delegate IN beneficiary_scope`
+- `INV_01_GLOBAL_BUDGET_EXCEEDED`, `settled + authorized + pending + reserved + new_tx <= ceiling`
+- `INV_02_SEMANTIC_INTENT_DRIFT`, `cart.items.category NOT IN semantic_exclusions`
+- `INV_03_UNAUTHORIZED_MCC`, `tx.merchant_mcc IN permitted_mccs`
+- `INV_04_UNAUTHORIZED_RAIL`, `tx.rail IN permitted_rails`
+- `INV_05_PER_TX_CAP_EXCEEDED`, `tx.amount <= per_transaction_cap`
+- `INV_06_AUTHORITY_EXPIRED`, `now <= delegation_created_at + validity_window_hours`
+- `INV_07_UNAUTHORIZED_BENEFICIARY`, `tx.vpa_delegate IN beneficiary_scope`
 
 Plus the **graduated response ladder**: ALLOW → STEP_UP → PARTIAL_AUTH → QUARANTINE →
 CAPABILITY_REDUCTION → REVIEW → BLOCK.
 
 > **Why not just block?** Because blocking is itself an attack. Flood the system with revocations
-> and you can force a lockout of the *legitimate* user — a denial of service. Partial authorisation
+> and you can force a lockout of the *legitimate* user, a denial of service. Partial authorisation
 > clears the genuine ₹2,500 basket and isolates only the suspicious ₹1,500.
 
 ---
 
-### Page 5 — Transaction Monitor `/transactions`
+### Page 5: Transaction Monitor `/transactions`
 
 One row per transaction, with the two columns that matter side by side:
 
@@ -236,26 +236,26 @@ Rows showing APPROVED next to CONTAINED are the contradiction FORSETI exists to 
 
 ---
 
-### Page 6 — Delegation Ledger `/ledger`
+### Page 6: Delegation Ledger `/ledger`
 
 The authority record, and the **two-phase exposure breakdown**: settled, authorized,
 pending, reserved.
 
 > **Why four buckets?** If you only count *settled* money, three transactions can each pass while
-> all three are still in flight — a race. Counting authorized + pending + reserved against the same
+> all three are still in flight, a race. Counting authorized + pending + reserved against the same
 > ceiling closes that window.
 
 Also shows permitted MCCs, semantic exclusions, and a timeline of every exposure change.
 
 ---
 
-### Page 7 — Agents `/agents`
+### Page 7: Agents `/agents`
 
 The closed loop.
 
-- **Red agent** — its next strategy and why it pivoted.
-- **Blue system** — active policy and how it hardened.
-- **Strategy scoring table** — every strategy with its score, prior, attempts observed,
+- **Red agent**. Its next strategy and why it pivoted.
+- **Blue system**. Active policy and how it hardened.
+- **Strategy scoring table**, every strategy with its score, prior, attempts observed,
   containment rate, mean detector score, feasibility and a written rationale.
 
 > The Red agent is **not** an `if attack == X: try Y` lookup. Its score is derived from outcomes it
@@ -265,91 +265,91 @@ The closed loop.
 
 ---
 
-### Page 8 — Threat Intelligence `/threat-intel`
+### Page 8: Threat Intelligence `/threat-intel`
 
 Coverage of the researched surface by channel and by attack surface, plus the agentic-specific
-vectors — the ones that only exist because an autonomous agent holds delegated authority.
+vectors, the ones that only exist because an autonomous agent holds delegated authority.
 
 ---
 
-### Page 9 — Detection Lab `/detection`
+### Page 9: Detection Lab `/detection`
 
 The science. Everything here is read from `artifacts/evaluation/`.
 
-- **Five metric cards** — PR-AUC, ROC-AUC, F1, recall @ 0.5% FPR, net value saved.
-- **Provenance** — architecture, backend version, dataset size, calibration ECE, and the exact
+- **Five metric cards**. PR-AUC, ROC-AUC, F1, recall @ 0.5% FPR, net value saved.
+- **Provenance**. Architecture, backend version, dataset size, calibration ECE, and the exact
   date range of each split.
-- **Attack-family holdout** — per-family scores for the withheld families.
-- **Baselines** — both conditions (family held out, and family seen).
-- **Ablation** — six retrained variants and the measured DTL lift.
+- **Attack-family holdout**, per-family scores for the withheld families.
+- **Baselines**, both conditions (family held out, and family seen).
+- **Ablation**, six retrained variants and the measured DTL lift.
 
 Every panel shows its experiment ID and seed. Missing artifacts render as **NOT RUN** with the
 command that generates them.
 
 ---
 
-### Page 10 — Fidelity Lab `/fidelity`
+### Page 10: Fidelity Lab `/fidelity`
 
 Statistical realism checks against public datasets.
 
 **This page currently reports `NOT RUN / DATASET UNAVAILABLE`, and that is correct.** PaySim and
 the ULB credit-card dataset are licensed and are not redistributed with this repository. Run
 `python scripts/download_anchors.py` for sources, drop the CSVs into `data/anchors/`, and re-run
-the harness — KS, correlation distance, discriminator AUC and TSTR will populate.
+the harness. KS, correlation distance, discriminator AUC and TSTR will populate.
 
 The self-consistency figures shown compare synthetic against synthetic. They prove the pipeline
 executes; they are **not** evidence of realism, and the page says so.
 
 ---
 
-### Page 11 — Explainability `/explainability`
+### Page 11: Explainability `/explainability`
 
 Real `shap.TreeExplainer` output.
 
-- **Global importance** — mean |SHAP| per feature across the test slice.
-- **Latest live transaction** — per-feature contributions, red pushing toward fraud, green toward
+- **Global importance**. Mean |SHAP| per feature across the test slice.
+- **Latest live transaction**, per-feature contributions, red pushing toward fraud, green toward
   legitimate.
 
 If genuine SHAP were unavailable, the badge would read `model_feature_contribution` and the
 fallback would never be called SHAP.
 
 > SHAP is kept out of the inline scoring path deliberately, which is why the latency benchmark
-> excludes it — a real authorizer computes explanations out-of-band.
+> excludes it, a real authorizer computes explanations out-of-band.
 
 ---
 
-### Page 12 — Policy Center `/policy`
+### Page 12: Policy Center `/policy`
 
 The seven delegation policies, which one is active, the authority parameters, and every Blue
 adaptation triggered by a real violation.
 
 ---
 
-### Page 13 — Quantum Audit `/audit`
+### Page 13: Quantum Audit `/audit`
 
 Post-quantum tamper-evidence.
 
-- **Provider** — algorithm, backend, and the FIPS 204 key/signature sizes.
-- **Signed snapshot** — the exact canonical JSON that was signed, its SHA-256, and the signature.
-- **Tamper-detection proof** — four cases run live: untouched (must verify), amount mutated (must
+- **Provider**. Algorithm, backend, and the FIPS 204 key/signature sizes.
+- **Signed snapshot**, the exact canonical JSON that was signed, its SHA-256, and the signature.
+- **Tamper-detection proof**, four cases run live: untouched (must verify), amount mutated (must
   fail), signature byte flipped (must fail), wrong key (must fail).
-- **Verify it yourself** — two buttons that call `POST /api/pqc/verify`. The second adds ₹5,000 to
+- **Verify it yourself**, two buttons that call `POST /api/pqc/verify`. The second adds ₹5,000 to
   the payload and shows verification failing.
 
 > **Why this matters:** an attacker who can silently edit the audit log can erase evidence of the
-> theft. Signing the state makes tampering detectable. It is *not* what catches the fraud — the DTL
+> theft. Signing the state makes tampering detectable. It is *not* what catches the fraud, the DTL
 > does that. PQC is the integrity layer underneath, and it is deliberately the least important claim
 > in the project.
 
 ---
 
-### Page 14 — Replay & Demo `/replay`
+### Page 14: Replay & Demo `/replay`
 
 Every round is recorded to `artifacts/events/*.jsonl` with per-event timing offsets.
 
-- **Run flagship demo** — deterministic seed-42 round.
+- **Run flagship demo**, deterministic seed-42 round.
 - **Play / Pause / Step / Restart**, speed 0.5x / 1x / 2x.
-- **Recorded rounds** list — pick any past round and replay it.
+- **Recorded rounds** list. Pick any past round and replay it.
 - Each step shows the raw event JSON.
 
 Replay reconstructs from the log using original timings, so you are reviewing exactly what
@@ -357,13 +357,13 @@ happened, not a re-simulation.
 
 ---
 
-### Page 15 — System Settings `/settings`
+### Page 15: System Settings `/settings`
 
-- **Runtime** — API base, stream status, model backend, SHAP status, PQC backend.
-- **Environment captured at training time** — seed, Python version, every package version.
-- **Experiment artifacts** — present or NOT RUN, each with its regeneration command.
-- **Measured latency budget** — the real p50/p95/p99 per stage.
-- **Data safety** — the six non-negotiable constraints.
+- **Runtime**. API base, stream status, model backend, SHAP status, PQC backend.
+- **Environment captured at training time**. Seed, Python version, every package version.
+- **Experiment artifacts**. Present or NOT RUN, each with its regeneration command.
+- **Measured latency budget**, the real p50/p95/p99 per stage.
+- **Data safety**, the six non-negotiable constraints.
 
 ---
 
@@ -383,7 +383,7 @@ happened, not a re-simulation.
       If not → emits a machine-checkable proof object.
             ↓
   [4] Feature extractor     detector/feature_schema.py
-      29 features. The SAME code runs in training and here — zero train/serve skew.
+      29 features. The SAME code runs in training and here, zero train/serve skew.
             ↓
   [5] ML detector           detector/inference.py
       Loads the trained artifact from disk. Never trains at startup.
@@ -400,29 +400,29 @@ happened, not a re-simulation.
 
 Each numbered step emits structured events, which are simultaneously (a) logged, (b) written to
 JSONL for replay, and (c) broadcast over the WebSocket. **That is why the frontend cannot drift
-from the backend** — it has no independent state of its own.
+from the backend**. It has no independent state of its own.
 
 ---
 
 ## 6. Who wins, and how you can tell
 
 **RED wins when** the aggregate spend exceeds the delegated ceiling and nothing stops it. You will
-see: rails green, exposure bar past 100%, no violation event, and `ATTACK SUCCEEDED — NO GLOBAL
+see: rails green, exposure bar past 100%, no violation event, and `ATTACK SUCCEEDED. NO GLOBAL
 CHECK`. Reproduce it by turning **DTL defense OFF**.
 
 **BLUE wins when** the invariant fires before the objective completes. You will see:
 `INVARIANT_VIOLATION`, a containment action, a signed audit snapshot, and
-`ROUND COMPLETE — BLUE WINS`.
+`ROUND COMPLETE. BLUE WINS`.
 
 The winner is decided by the engine (`detected = proof is not None`) and reported in the
-`ATTACK_COMPLETE` event — the UI only renders it.
+`ATTACK_COMPLETE` event, the UI only renders it.
 
 ---
 
 ## 7. Things a judge is likely to ask
 
 **“Is the animation real or scripted?”**
-Real. Open the event log beside the diagram — every animation frame maps to a logged backend
+Real. Open the event log beside the diagram, every animation frame maps to a logged backend
 event with a timestamp. Turn the backend off and the arena goes idle instead of animating.
 
 **“Your ML score on the flagship attack is low. Isn't that a failure?”**
@@ -449,12 +449,12 @@ in-flight authorisations, and paired with semantic-intent and scope invariants. 
 placement and the two-phase accounting, not the arithmetic.
 
 **“Is the cryptography real?”**
-Yes — FIPS 204 ML-DSA-44 with correct 1312/2560/2420 byte sizes. Press the tamper buttons on the
+Yes. FIPS 204 ML-DSA-44 with correct 1312/2560/2420 byte sizes. Press the tamper buttons on the
 Quantum Audit page and watch verification fail on a mutated payload. If the library were missing
 the page would read PQC MODULE UNAVAILABLE.
 
 **“Is the SHAP real?”**
-Yes — `shap.TreeExplainer`. The fallback path exists but is labelled
+Yes, `shap.TreeExplainer`. The fallback path exists but is labelled
 `model_feature_contribution` and is never called SHAP.
 
 **“How realistic is your synthetic data?”**

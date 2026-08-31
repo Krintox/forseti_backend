@@ -4,7 +4,7 @@ MASTERCARD INNOVATION CHALLENGE · GFF 2026 · OPERATOR GUIDE
 
 Three payment rails each approved ₹4,000. Every guard
 
-said yes. The ₹10,000 budget is now ₹2,000 overdrawn — and nobody broke a rule on their own road.
+said yes. The ₹10,000 budget is now ₹2,000 overdrawn, and nobody broke a rule on their own road.
 
 Dashboard :3005 API :8000 Seed 42 15 pages
 
@@ -18,7 +18,7 @@ TRADITIONAL CONTROLS ASK
 
 ## FORSETI ASKS
 
-“Is this agent still acting within the authority it was given — across
+“Is this agent still acting within the authority it was given, across
 
 every rail?”
 
@@ -26,9 +26,9 @@ every rail?”
 
 You hire a robot assistant to buy groceries and tell it: you may spend up to
 
-₹10,000, on groceries. That is a delegation — the robot now holds some of your spending authority.
+₹10,000, on groceries. That is a delegation, the robot now holds some of your spending authority.
 
-Your money can leave your account through several different rails — different roads a
+Your money can leave your account through several different rails. Different roads a
 
 payment can travel. A card rail. A UPI instant-transfer rail. An agentic machine-to- machine rail. Each road has its own guard, and each guard only watches their own road.
 
@@ -55,24 +55,24 @@ CEILING ₹10,000
 
 Each guard compared ₹4,000 to its own ₹10,000 limit and correctly said yes. The rule
 
-that broke is the one nobody was watching: your total. FORSETI is the missing watcher — it stands above all three roads and compares the sum to what you actually authorised.
+that broke is the one nobody was watching: your total. FORSETI is the missing watcher. It stands above all three roads and compares the sum to what you actually authorised.
 
 ## 02 Start it
 
 Two processes, two terminals.
 
 ```
-\# Terminal 1 — the brain (API + engine)
+\# Terminal 1, the brain (API + engine)
 cd backend
 python -m uvicorn app.main:app --port 8000 --host 0.0.0.0
-# Terminal 2 — the dashboard
+# Terminal 2: the dashboard
 cd frontend
 npm run dev -- -p 3005
 ```
 
 Open http://localhost:3005. Bottom-left of the sidebar you should see a green
 
-pulsing dot reading Live stream — that means the dashboard is attached to the engine's event feed. If it says “Reconnecting”, the backend isn't up yet.
+pulsing dot reading Live stream. That means the dashboard is attached to the engine's event feed. If it says “Reconnecting”, the backend isn't up yet.
 
 To regenerate every measurement first: python tasks.py all (about 25 seconds).
 
@@ -80,7 +80,7 @@ To regenerate every measurement first: python tasks.py all (about 25 seconds).
 
 Go to Live Arena, leave the limit at 10000, keep Cross-Rail Split selected, press
 
-EXECUTE ATTACK — then don't touch anything for fourteen seconds.
+EXECUTE ATTACK, then don't touch anything for fourteen seconds.
 
 03
 
@@ -99,7 +99,7 @@ Transaction 1 built and dispatched
 
 2.2s
 
-LOCALLY APPROVED — LOOKS NORMAL
+LOCALLY APPROVED. LOOKS NORMAL
 
 Card adapter checked its own limit only. Tile turns blue, shows ₹4,000
 
@@ -113,7 +113,7 @@ DTL adds it to the global running total
 
 ML RISK 6.8%
 
-Trained XGBoost scores it — low, and correctly so
+Trained XGBoost scores it. Low, and correctly so
 
 6.4s
 
@@ -131,7 +131,7 @@ Third rail approved. The total now exceeds the grant
 
 VIOLATION: INV_01_GLOBAL_BUDGET_EXCEEDED
 
-The invariant fires — over by ₹2,000
+The invariant fires, over by ₹2,000
 
 11.3s
 
@@ -155,14 +155,14 @@ Red agent observed the block and re-scored its options
 
 The ML risk score is only 6.8%. That is not a bug and we do not hide it. A single ₹4,000 grocery
 
-payment genuinely is innocent-looking — no classifier can catch this from one transaction. Arithmetic on the total catches it. That gap is the entire argument of the project.
+payment genuinely is innocent-looking, no classifier can catch this from one transaction. Arithmetic on the total catches it. That gap is the entire argument of the project.
 
 
 ## The measured result
 
 Cross-rail splitting is withheld from training entirely, then tested. Recall on
 
-that unseen family — every model scored on the same test slice, seed 42.
+that unseen family, every model scored on the same test slice, seed 42.
 
 04
 
@@ -174,7 +174,7 @@ that unseen family — every model scored on the same test slice, seed 42.
 | Hybrid ML + DTL features | 0.000 | Still per-transaction |
 | Deterministic DTL invariant | 0.905 | Compares the aggregate |
 
-## This is the whole argument — and it is a negative result about our own classifier.
+## This is the whole argument: and it is a negative result about our own classifier.
 
 Every learned model scores a transaction in isolation, so one ₹4,000 leg looks exactly
 
@@ -218,13 +218,13 @@ agentic spending ships. All of it is advisory.
 
 The language model never enforces. It explains, translates and proposes; every proposal is
 
-schema-validated and re-checked by the deterministic engine before it can affect anything. Pull the API keys out and the security system behaves exactly as before — only the explanations disappear. Ten providers, sixty keys, tier-ordered fallback; running out of quota is a normal event, not an error.
+schema-validated and re-checked by the deterministic engine before it can affect anything. Pull the API keys out and the security system behaves exactly as before, only the explanations disappear. Ten providers, sixty keys, tier-ordered fallback; running out of quota is a normal event, not an error.
 
 ## Intent Compiler
 
 Problem: a delegation is only as strong as its
 
-machine-readable form. “Nothing resellable” — the part you cared about — is thrown away at that boundary.
+machine-readable form. “Nothing resellable”, the part you cared about, is thrown away at that boundary.
 
 - Compiles plain words into ceiling, MCCs, exclusions, TTL
 
@@ -428,13 +428,13 @@ The judging page. The attack streamed live,
 
 with the DTL interception.
 
-- Delegated limit — type any ceiling, press APPLY
+- Delegated limit. Type any ceiling, press APPLY
 
-- DTL defense toggle — OFF is the legacy world
+- DTL defense toggle. OFF is the legacy world
 
 - Speed 0.5× / 1× / 2×
 
-- Vector checkboxes — select several to run a campaign
+- Vector checkboxes. Select several to run a campaign
 
 - EXECUTE ATTACK / RESET
 
@@ -454,7 +454,7 @@ expressions, and the graduated response ladder.
 
 Two-phase exposure: settled, authorized,
 
-pending, reserved — plus scope and manual limit control.
+pending, reserved, plus scope and manual limit control.
 
 - Counting in-flight spend is what closes the race window
 
@@ -491,7 +491,7 @@ transaction.
 
 KS, correlation distance, discriminator AUC,
 
-TSTR — or an honest NOT RUN.
+TSTR, or an honest NOT RUN.
 
 - Currently NOT RUN: licensed anchors absent
 
@@ -535,11 +535,11 @@ round from its JSONL log at original timing.
 
 ## System Settings
 
-## TRY THIS — THE MOST PERSUASIVE 30 SECONDS
+## TRY THIS: THE MOST PERSUASIVE 30 SECONDS
 
 In Live Arena, turn DTL defense OFF and attack. Every rail approves, exposure reaches ₹12,000
 
-against a ₹10,000 grant, nothing objects, and the round ends RED TEAM WINS. That is today's world. Toggle it back ON and run the identical attack — contained. Then set the limit to ₹20,000 and run again: ₹12,000 now fits, so no violation fires. The rule is arithmetic on your number, not a threshold we tuned.
+against a ₹10,000 grant, nothing objects, and the round ends RED TEAM WINS. That is today's world. Toggle it back ON and run the identical attack, contained. Then set the limit to ₹20,000 and run again: ₹12,000 now fits, so no violation fires. The rule is arithmetic on your number, not a threshold we tuned.
 
 ## What happens to one transaction
 
@@ -550,29 +550,29 @@ logged, written to JSONL for replay, and broadcast over the WebSocket.
 07
 
 
-| 1 | simulator/adapters/ | Rail adapter — checks only its own limit and merchant scope. |
+| 1 | simulator/adapters/ | Rail adapter. Checks only its own limit and merchant scope. |
 | --- | --- | --- |
 |   |   | Approves. |
-| 2 | dtl/ledger.py | DTL ledger — adds it to global exposure across every rail. |
-| 3 | dtl/invariant_engine.py | Invariant engine — is settled + authorized + pending + |
+| 2 | dtl/ledger.py | DTL ledger. Adds it to global exposure across every rail. |
+| 3 | dtl/invariant_engine.py | Invariant engine. Is settled + authorized + pending + |
 |   |   | reserved + new_tx ≤ ceiling? If not, emits a machine- |
 |   |   | checkable proof. |
-| 4 | detector/feature_schema. | Feature extractor — 37 features across 6 groups. The same code runs in |
+| 4 | detector/feature_schema. | Feature extractor, 37 features across 6 groups. The same code runs in |
 |   | py | training and here, so there is zero train/serve skew. |
-| 5 | detector/inference.py | ML detector — loads the trained artifact from disk. Never |
+| 5 | detector/inference.py | ML detector. Loads the trained artifact from disk. Never |
 |   |   | trains at startup. |
-| 6 | dtl/cost_governor.py | Cost governor — separates legitimate from suspicious value |
+| 6 | dtl/cost_governor.py | Cost governor. Separates legitimate from suspicious value |
 |   |   | and picks the mildest sufficient action. |
-| 7 | crypto/mldsa_audit.py | PQC auditor — canonicalises the DTL state and signs it with |
+| 7 | crypto/mldsa_audit.py | PQC auditor. Canonicalises the DTL state and signs it with |
 |   |   | ML-DSA-44. |
-| 8 | feedback/adaptive_planne | Feedback engine — Red rescores its strategies; Blue hardens |
+| 8 | feedback/adaptive_planne | Feedback engine. Red rescores its strategies; Blue hardens |
 |   | r.py | policy. |
 
 ## WHY THE PICTURE CAN'T LIE
 
 The dashboard holds no independent state. Every arrow, label and amount is rendered from an
 
-event the backend actually emitted — which is why the event log beside the diagram works as a receipt. Stop the backend and the arena goes idle rather than animating.
+event the backend actually emitted. Which is why the event log beside the diagram works as a receipt. Stop the backend and the arena goes idle rather than animating.
 
 Q i
 

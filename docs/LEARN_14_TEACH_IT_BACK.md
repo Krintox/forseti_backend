@@ -1,4 +1,4 @@
-# LEARN_14 — Teach It Back: Speaking Scripts, Demo Runbook & Q&A Defense
+# LEARN_14: Teach It Back: Speaking Scripts, Demo Runbook & Q&A Defense
 
 > **Prerequisites:** [LEARN_01](LEARN_01_WHAT_AND_WHY.md) through [LEARN_12](LEARN_12_TESTS_AND_VERIFY.md)  
 > **You will be able to:**
@@ -25,9 +25,9 @@ Below are three verbatim presentation scripts tailored to standard industry eval
 ### The 60-Second Elevator Pitch
 > *"When humans delegate financial authority to AI agents, modern payment rails face a structural blind spot: **each rail only enforces its own local limit in isolation**. An agent with a ₹10,000 grocery budget can execute ₹4,000 on a credit card, ₹4,000 on UPI, and ₹4,000 on an agentic mandate. Every rail approves locally, but the human's total budget is breached by ₹2,000. 
 >
-> FORSETI solves this by introducing the **Delegation-Trust Ledger (DTL)**. It evaluates every transaction against **seven** deterministic invariants — amount, per-transaction limit, permitted rails, merchant category, beneficiary, semantic basket intent, and validity window — plus an eighth check for a suspended mandate.
+> FORSETI solves this by introducing the **Delegation-Trust Ledger (DTL)**. It evaluates every transaction against **seven** deterministic invariants, amount, per-transaction limit, permitted rails, merchant category, beneficiary, semantic basket intent, and validity window, plus an eighth check for a suspended mandate.
 >
-> Here is the measured result, and the interesting part is the comparison rather than any one number. With the cross-rail attack family **withheld from training**, a model that cannot see across rails reaches **0.172** recall on it. Give the same model DTL aggregate features and it reaches **0.828**. The deterministic invariant reaches **0.844** — and **0.844 again** with the family in training, because it is arithmetic over the grant and has no fitted parameter that training data could move. That equality is an identity, not a lucky run (`artifacts/evaluation/baselines.json`).
+> Here is the measured result, and the interesting part is the comparison rather than any one number. With the cross-rail attack family **withheld from training**, a model that cannot see across rails reaches **0.172** recall on it. Give the same model DTL aggregate features and it reaches **0.828**. The deterministic invariant reaches **0.844**, and **0.844 again** with the family in training, because it is arithmetic over the grant and has no fitted parameter that training data could move. That equality is an identity, not a lucky run (`artifacts/evaluation/baselines.json`).
 >
 > We do not claim the classifier generalises: 0.828 against 0.844 is inside the 95% interval at n=64, and we say so rather than round it up. Paired with a calibrated GBDT, an adversarial cost governor, a synthetic scoped-token lifecycle, an advisory 12-agent AI layer, and NIST FIPS 204 post-quantum audit signatures, FORSETI is a research prototype for keeping delegated authority enforceable across rails.*
 
@@ -36,7 +36,7 @@ Below are three verbatim presentation scripts tailored to standard industry eval
 ### The 5-Minute Technical Overview
 > *"Good morning. Today I am presenting FORSETI, a hybrid security kernel for autonomous agentic commerce.
 >
-> As AI agents take over consumer purchasing, financial delegation is shifting from human-in-the-loop checkout to machine-speed autonomous execution. However, existing payment networks—Card Tokenization, UPI-Circle, and Web Mandates—operate in strict silos. No single rail knows what is happening on other rails.
+> As AI agents take over consumer purchasing, financial delegation is shifting from human-in-the-loop checkout to machine-speed autonomous execution. However, existing payment networks, Card Tokenization, UPI-Circle, and Web Mandates, operate in strict silos. No single rail knows what is happening on other rails.
 >
 > An adversary can exploit this by launching a **Cross-Rail Split Attack**: dividing a ₹12,000 spend across three separate payment rails under a ₹10,000 ceiling. Because each ₹4,000 leg is under the local rail limit, every rail approves locally.
 >
@@ -44,7 +44,7 @@ Below are three verbatim presentation scripts tailored to standard industry eval
 >
 > **First, the Delegation-Trust Ledger (DTL):** The DTL maintains global authority state across seven dimensions: `AMOUNT`, `PER_TX`, `RAIL`, `MERCHANT`, `PURPOSE`, `TIME`, and `BENEFICIARY` (LEARN_16). It uses **Two-Phase Exposure Accounting** to track settled, authorized, pending, and reserved spend, eliminating in-flight TOCTOU race conditions.
 >
-> **Second, Deterministic Invariant Enforcement:** The DTL evaluates seven invariants in strict order, preceded by a check for a suspended mandate. Withhold the cross-rail split family from training and a model with no cross-rail view reaches **0.172** recall on it — an individual ₹4,000 grocery leg genuinely does look normal when nobody holds the total. Give a model DTL aggregate features and it reaches **0.828**. The invariant reaches **0.844**, and the same **0.844** with the family in training, because arithmetic on aggregate exposure ($₹4,000 \times 3 = ₹12,000 > ₹10,000$) has nothing to learn. The equality of those two columns is the claim; the classifier's near-match on one run of 64 transactions is not something we present as proven generalisation.
+> **Second, Deterministic Invariant Enforcement:** The DTL evaluates seven invariants in strict order, preceded by a check for a suspended mandate. Withhold the cross-rail split family from training and a model with no cross-rail view reaches **0.172** recall on it, an individual ₹4,000 grocery leg genuinely does look normal when nobody holds the total. Give a model DTL aggregate features and it reaches **0.828**. The invariant reaches **0.844**, and the same **0.844** with the family in training, because arithmetic on aggregate exposure ($₹4,000 \times 3 = ₹12,000 > ₹10,000$) has nothing to learn. The equality of those two columns is the claim; the classifier's near-match on one run of 64 transactions is not something we present as proven generalisation.
 >
 > **Third, The Adversarial Cost Governor:** To prevent denial-of-service lockouts, the cost governor avoids blanket card freezes. On semantic purpose violations, it applies **Partial Authorization**, approving the legitimate grocery portion while isolating the gift card. On budget breaches, it applies a **Headroom Cap**, approving spend up to the remaining limit.
 >
@@ -57,7 +57,7 @@ Below are three verbatim presentation scripts tailored to standard industry eval
 ### The 20-Minute Deep-Dive Presentation
 > *"Structure of the 20-minute defense:
 > 1. **Minutes 0–3:** The Autonomous Commerce Shift and the Cross-Rail Blind Spot (§1-2).
-> 2. **Minutes 3–7:** The DTL architecture, multidimensional authority, and the four-bucket exposure model with `try_reserve()` — the atomic check-and-book demonstrated against a deliberately unsafe control under 60 threads (`models/state.py`, `dtl/ledger.py`).
+> 2. **Minutes 3–7:** The DTL architecture, multidimensional authority, and the four-bucket exposure model with `try_reserve()`, the atomic check-and-book demonstrated against a deliberately unsafe control under 60 threads (`models/state.py`, `dtl/ledger.py`).
 > 3. **Minutes 7–11:** Invariant Mathematics, Worked Cross-Rail Arithmetic, and Adversarial Cost Governor Containment (`dtl/invariant_engine.py`, `dtl/cost_governor.py`).
 > 4. **Minutes 11–15:** ML science: 37 features, the categorical-leakage audit that gates the generator, holdout baselines with 95% intervals, and why the invariant's two columns are equal by construction (`detector/`, `artifacts/evaluation/`).
 > 5. **Minutes 15–18:** Live Arena Demonstration: Executing `CROSS_RAIL_SPLIT` with DTL ON vs DTL OFF, and verifying PQC signatures in `/audit`.
@@ -118,7 +118,7 @@ Follow these steps to conduct an interactive live demo:
 ### Q2: "If your deterministic invariant gets 0.844 cross-rail recall, why do you need a machine learning model at all?"
 > *"Two reasons, and the second is the honest one.
 >
-> First, the invariant only sees what the grant states explicitly — budget, per-transaction caps, rail and MCC membership. Adversaries also act inside every stated boundary: velocity patterns, regrant behaviour, merchant risk that no allowlist encodes. The model scores those, calibrated, with SHAP attributions the Cost Governor uses to size a proportionate response instead of a blanket block.
+> First, the invariant only sees what the grant states explicitly. Budget, per-transaction caps, rail and MCC membership. Adversaries also act inside every stated boundary: velocity patterns, regrant behaviour, merchant risk that no allowlist encodes. The model scores those, calibrated, with SHAP attributions the Cost Governor uses to size a proportionate response instead of a blanket block.
 >
 > Second, the invariant is blunt. On this slice it runs a **15.76% false-positive rate** (`baselines.json`), which is the price of a membership-and-arithmetic check with no notion of degree. A system built on the invariant alone would decline too much legitimate spending to ship. The pairing is not decoration."*
 
@@ -134,7 +134,7 @@ Follow these steps to conduct an interactive live demo:
 ---
 
 ### Q4: "Why don't your 12 AI agents enforce transaction approvals directly?"
-> *"Because LLMs are non-deterministic, vulnerable to prompt injection, and introduce hundreds of milliseconds of latency. In FORSETI, the rule is absolute: **THE LLM NEVER ENFORCES** (`ai/agents.py:7`). All authorization decisions are computed deterministically in $<0.01$ ms by the DTL Invariant Engine. The AI agents are strictly advisory—explaining events, compiling intent, and drafting compliance notices."*
+> *"Because LLMs are non-deterministic, vulnerable to prompt injection, and introduce hundreds of milliseconds of latency. In FORSETI, the rule is absolute: **THE LLM NEVER ENFORCES** (`ai/agents.py:7`). All authorization decisions are computed deterministically in $<0.01$ ms by the DTL Invariant Engine. The AI agents are strictly advisory. Explaining events, compiling intent, and drafting compliance notices."*
 
 ---
 
@@ -194,4 +194,4 @@ Result: INV_01 Violation -> Headroom Cap (₹2,000 Approved, ₹2,000 Held)
 ---
 
 ## Where to go next
-→ [LEARN_15 — Known Gaps and Discrepancies](LEARN_15_KNOWN_GAPS_AND_DISCREPANCIES.md)
+→ [LEARN_15. Known Gaps and Discrepancies](LEARN_15_KNOWN_GAPS_AND_DISCREPANCIES.md)

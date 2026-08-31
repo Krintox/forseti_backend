@@ -1,4 +1,4 @@
-# LEARN_18 — The Agentic Payment Kill Chain
+# LEARN_18: The Agentic Payment Kill Chain
 
 > **Prerequisites:** [LEARN_05](LEARN_05_ATTACKS_AND_SIMULATOR.md), [LEARN_16](LEARN_16_INTENT_FIREWALL.md), [LEARN_17](LEARN_17_DECEPTION_LAB.md)  
 > **You will be able to:**
@@ -13,13 +13,13 @@
 ## 1. Eleven Stages, One Taxonomy
 
 🧒 **Like you're five**  
-Think of a robber's plan as a comic strip with eleven panels: first they trick you, then they sneak past the guard, then they grab the wrong thing, and so on. FORSETI's Kill Chain is that comic strip drawn out in full, in advance, so that whenever an attack happens, you can point at exactly which panel it belongs to — instead of just saying "something bad happened."
+Think of a robber's plan as a comic strip with eleven panels: first they trick you, then they sneak past the guard, then they grab the wrong thing, and so on. FORSETI's Kill Chain is that comic strip drawn out in full, in advance, so that whenever an attack happens, you can point at exactly which panel it belongs to, instead of just saying "something bad happened."
 
 🏪 **In real life**  
 Security teams reason about attacks in terms of MITRE ATT&CK-style kill chains: which stage of the attacker's lifecycle did this incident represent? `backend/app/kill_chain/stages.py:25` defines an 11-stage lifecycle for agentic payments, from intent manipulation through settlement conflict.
 
 🎓 **Properly**  
-This module is explicitly a **mapping and scoring layer**, not a new attack surface: it answers "where in the agent's lifecycle did this ALREADY-EXISTING attack land," for the 16 vectors covered in LEARN_04, LEARN_05, LEARN_16, and LEARN_17, plus the 2 Settlement Reconciliation vectors covered in LEARN_21 — not another kind of thing to detect.
+This module is explicitly a **mapping and scoring layer**, not a new attack surface: it answers "where in the agent's lifecycle did this ALREADY-EXISTING attack land," for the 16 vectors covered in LEARN_04, LEARN_05, LEARN_16, and LEARN_17, plus the 2 Settlement Reconciliation vectors covered in LEARN_21, not another kind of thing to detect.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -45,17 +45,17 @@ This module is explicitly a **mapping and scoring layer**, not a new attack surf
 └────┴───────────────────────────┴───────────────────────────────────────┘
 ```
 
-Every vector maps to exactly **one** stage — its own primary mechanism — the same one-mapping-per-vector discipline `STRATEGY_DIMENSION` already applies in the orchestrator (LEARN_05). "This vector touches four stages a little" is not a checkable claim; one honest primary stage is.
+Every vector maps to exactly **one** stage, its own primary mechanism, the same one-mapping-per-vector discipline `STRATEGY_DIMENSION` already applies in the orchestrator (LEARN_05). "This vector touches four stages a little" is not a checkable claim; one honest primary stage is.
 
 ### Why stages 10-11 needed a third mechanism, not another invariant
 
-All 11 stages now have an implemented vector behind them (`STRATEGY_TO_STAGE` in `kill_chain/stages.py` has no unmapped entries left). `SETTLEMENT_CONFLICT` and `RECONCILIATION_DRIFT` were the last two, and closing them could **not** reuse the DTL invariant engine or Deception Lab: both vectors are designed to satisfy every one of the seven authority dimensions cleanly at authorization time, and neither involves the agent's own reasoning being deceived. The failure is entirely post-authorization — two settlement legs disagreeing with each other after both were individually, correctly authorised. `app/settlement/reconciliation.py` is the resulting THIRD parallel mechanism; see LEARN_21 for the full detail, including why it deliberately does not route through `cost_governor.py`'s invariant-code dispatch.
+All 11 stages now have an implemented vector behind them (`STRATEGY_TO_STAGE` in `kill_chain/stages.py` has no unmapped entries left). `SETTLEMENT_CONFLICT` and `RECONCILIATION_DRIFT` were the last two, and closing them could **not** reuse the DTL invariant engine or Deception Lab: both vectors are designed to satisfy every one of the seven authority dimensions cleanly at authorization time, and neither involves the agent's own reasoning being deceived. The failure is entirely post-authorization, two settlement legs disagreeing with each other after both were individually, correctly authorised. `app/settlement/reconciliation.py` is the resulting THIRD parallel mechanism; see LEARN_21 for the full detail, including why it deliberately does not route through `cost_governor.py`'s invariant-code dispatch.
 
 ---
 
 ## 2. Why Coverage Is a Session Concept, Not a Round Concept
 
-A single arena round runs **one** strategy, so it exercises exactly one stage. "Kill-chain coverage" only becomes meaningful across a **session** of multiple rounds — which is exactly how `ArenaBattleOrchestrator.round_history` (`backend/app/arena/orchestrator.py`) works: every completed round appends its `kill_chain` score to a list that survives until the operator calls `reset()`.
+A single arena round runs **one** strategy, so it exercises exactly one stage. "Kill-chain coverage" only becomes meaningful across a **session** of multiple rounds, which is exactly how `ArenaBattleOrchestrator.round_history` (`backend/app/arena/orchestrator.py`) works: every completed round appends its `kill_chain` score to a list that survives until the operator calls `reset()`.
 
 ```python
 # backend/app/kill_chain/scoring.py:110
@@ -74,11 +74,11 @@ def coverage(round_scores: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 ## 3. Per-Round Scoring: Nothing Is Estimated
 
-`score_round()` (`backend/app/kill_chain/scoring.py:33`) computes five numbers, every one of them read from data the round already produced — nothing re-simulated:
+`score_round()` (`backend/app/kill_chain/scoring.py:33`) computes five numbers, every one of them read from data the round already produced, nothing re-simulated:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│              SCORE_ROUND() — WHERE EVERY NUMBER COMES FROM             │
+│              SCORE_ROUND(). WHERE EVERY NUMBER COMES FROM             │
 ├──────────────────────────────┬───────────────────────────────────────────┤
 │ time_to_detection_ms          │ offset_ms of the first INVARIANT_        │
 │                               │ VIOLATION (or DECEPTION_DETECTED) event  │
@@ -86,27 +86,27 @@ def coverage(round_scores: List[Dict[str, Any]]) -> Dict[str, Any]:
 ├──────────────────────────────┼───────────────────────────────────────────┤
 │ economic_exposure_prevented_  │ Sum of `overshoot` from every            │
 │ inr                           │ INVARIANT_VIOLATION event's own payload  │
-│                               │ — the proof's own arithmetic, re-read.   │
+│                               │, the proof's own arithmetic, re-read.   │
 ├──────────────────────────────┼───────────────────────────────────────────┤
 │ blast_radius_score            │ HEURISTIC: distinct rails touched / 3.   │
 │                               │ Labelled a heuristic, not measured.      │
 ├──────────────────────────────┼───────────────────────────────────────────┤
 │ attack_chain_score            │ HEURISTIC composite: 0.5×contained +     │
 │                               │ 0.3×speed + 0.2×(exposure prevented>0)   │
-│                               │ — a simple, deterministic, DOCUMENTED    │
+│                               │, a simple, deterministic, DOCUMENTED    │
 │                               │ formula, not a tuned model.              │
 └──────────────────────────────┴───────────────────────────────────────────┘
 ```
 
 ### A real bug caught by the numbers, not by reading the diff
 
-The very first version of `score_round()` read `round_summary["events"]` directly, not realising that field is `EventRecorder.timeline()` — the recorder's **cumulative** log across every round since the last explicit `reset()`, not just the round that just ran. Running two rounds back to back would have made every round after the first compute its `time_to_detection_ms` against the FIRST round's `ATTACK_STARTED` timestamp — silently wrong, and it would have looked plausible (a real number, just measuring the wrong window). The fix filters events to `event["round_id"] == round_number` before any offset lookup, and is pinned by a dedicated regression test (`test_second_round_is_not_confused_by_the_first_rounds_events`) plus a live multi-round smoke test through the real API with no reset in between.
+The very first version of `score_round()` read `round_summary["events"]` directly, not realising that field is `EventRecorder.timeline()`, the recorder's **cumulative** log across every round since the last explicit `reset()`, not just the round that just ran. Running two rounds back to back would have made every round after the first compute its `time_to_detection_ms` against the FIRST round's `ATTACK_STARTED` timestamp, silently wrong, and it would have looked plausible (a real number, just measuring the wrong window). The fix filters events to `event["round_id"] == round_number` before any offset lookup, and is pinned by a dedicated regression test (`test_second_round_is_not_confused_by_the_first_rounds_events`) plus a live multi-round smoke test through the real API with no reset in between.
 
 ---
 
 ## 4. Reading the Cards Live
 
-The Kill Chain card on the Live Arena page (`frontend/app/arena/page.tsx`) shows, per round: the stage name, detection latency, chain score, exposure prevented, and blast radius — sourced directly from `lastRound.kill_chain`, which the backend already attaches to every round result. No extra frontend fetch is needed for the per-round view; `GET /api/arena/kill-chain` exists specifically for the session-level coverage rollup and the static stage taxonomy.
+The Kill Chain card on the Live Arena page (`frontend/app/arena/page.tsx`) shows, per round: the stage name, detection latency, chain score, exposure prevented, and blast radius, sourced directly from `lastRound.kill_chain`, which the backend already attaches to every round result. No extra frontend fetch is needed for the per-round view; `GET /api/arena/kill-chain` exists specifically for the session-level coverage rollup and the static stage taxonomy.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -131,13 +131,13 @@ The Kill Chain card on the Live Arena page (`frontend/app/arena/page.tsx`) shows
 <summary>Answers</summary>
 
 1. Because each round runs exactly one strategy, and each strategy maps to exactly one primary stage in `STRATEGY_TO_STAGE`.
-2. Because the DTL invariant engine only evaluates authority dimensions AT authorization time, and both vectors are designed to pass every one of those checks cleanly on both legs. The failure only exists in the disagreement between two settlement legs AFTER both were individually authorised — a post-authorization lifecycle question the seven invariants are not positioned to answer, which is why `app/settlement/reconciliation.py` exists as a third parallel mechanism (LEARN_21).
-3. The `overshoot` field the invariant engine's own `INVARIANT_VIOLATION` proof already computed — summed across every violation event in the round, not re-derived.
-4. Heuristic — both are explicitly documented in `scoring.py`'s docstring as composites with no external ground truth, unlike, say, `economic_exposure_prevented_inr`, which is a direct read of a value already computed elsewhere.
-5. Running two rounds back to back without a reset would have made the second round's latency measured against the FIRST round's `ATTACK_STARTED` timestamp, since `EventRecorder.timeline()` accumulates across rounds — invisible from reading `score_round()` alone because the bug only manifests across multiple calls, not within one.
+2. Because the DTL invariant engine only evaluates authority dimensions AT authorization time, and both vectors are designed to pass every one of those checks cleanly on both legs. The failure only exists in the disagreement between two settlement legs AFTER both were individually authorised, a post-authorization lifecycle question the seven invariants are not positioned to answer, which is why `app/settlement/reconciliation.py` exists as a third parallel mechanism (LEARN_21).
+3. The `overshoot` field the invariant engine's own `INVARIANT_VIOLATION` proof already computed. Summed across every violation event in the round, not re-derived.
+4. Heuristic, both are explicitly documented in `scoring.py`'s docstring as composites with no external ground truth, unlike, say, `economic_exposure_prevented_inr`, which is a direct read of a value already computed elsewhere.
+5. Running two rounds back to back without a reset would have made the second round's latency measured against the FIRST round's `ATTACK_STARTED` timestamp, since `EventRecorder.timeline()` accumulates across rounds, invisible from reading `score_round()` alone because the bug only manifests across multiple calls, not within one.
 </details>
 
 ---
 
 ## Where to go next
-→ [LEARN_19 — Graph Sentinel & the ML Feature Expansion](LEARN_19_GRAPH_SENTINEL.md)
+→ [LEARN_19. Graph Sentinel & the ML Feature Expansion](LEARN_19_GRAPH_SENTINEL.md)

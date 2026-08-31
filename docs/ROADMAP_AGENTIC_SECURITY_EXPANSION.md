@@ -1,18 +1,18 @@
-# FORSETI — Agentic Payment Security Runtime Expansion
+# FORSETI: Agentic Payment Security Runtime Expansion
 
 <!--historical-record-->
-> **HISTORICAL RECORD — the numbers below were true when this was written and several
+> **HISTORICAL RECORD, the numbers below were true when this was written and several
 > are now superseded.** This document is kept as a record of what was measured and
 > decided at the time, so it is deliberately NOT updated when results change.
 >
 > For current figures see [`MEASURED_NUMBERS.md`](MEASURED_NUMBERS.md), which is
 > generated from the artifacts that ship. Notably superseded here: the pre-leak-fix
-> cross-rail recalls, PR-AUC, and every DTL/graph feature-lift value — see
+> cross-rail recalls, PR-AUC, and every DTL/graph feature-lift value, see
 > [`LEARN_22_THE_LEAK.md`](LEARN_22_THE_LEAK.md) for why they changed.
 
 
 Tracking doc for the multi-session build described in the master implementation
-prompt (2026-08-21). This is the persistent checklist across sessions — update
+prompt (2026-08-21). This is the persistent checklist across sessions. Update
 checkboxes as work lands, and add a dated note under a phase when something is
 skipped, descoped, or changed from the original prompt (with why).
 
@@ -25,49 +25,49 @@ under `backend/app/`.
 
 ---
 
-## Phase P0 — Core Foundation
+## Phase P0: Core Foundation
 
-### Module 1 — Agent Intent Firewall (`backend/app/intent_firewall/`)
-- [x] `drift_engine.py` — computes the multi-dimensional drift vector (reuses
+### Module 1: Agent Intent Firewall (`backend/app/intent_firewall/`)
+- [x] `drift_engine.py`. Computes the multi-dimensional drift vector (reuses
       `DTLInvariantEngine.evaluate_all` rather than re-implementing the 6
       existing checks; adds the dimensions the invariant engine doesn't cover)
-- [x] New dimension: **BENEFICIARY** — `beneficiary_scope` field on
+- [x] New dimension: **BENEFICIARY**, `beneficiary_scope` field on
       `DTLGlobalAuthorityState`, `INV_07_UNAUTHORIZED_BENEFICIARY`
-- [x] `firewall_decision.py` — ALLOW / PARTIAL_DRIFT / HARD_DRIFT verdict from
+- [x] `firewall_decision.py`. ALLOW / PARTIAL_DRIFT / HARD_DRIFT verdict from
       the drift vector
-- [x] Synthetic attack: **Attack E (Beneficiary Drift)** —
+- [x] Synthetic attack: **Attack E (Beneficiary Drift)**,
       `backend/app/redteam/vectors/beneficiary_drift.py`
-- [x] Orchestrator wiring — new `INTENT_FIREWALL_VERDICT` event emitted every
+- [x] Orchestrator wiring, new `INTENT_FIREWALL_VERDICT` event emitted every
       round alongside the existing `INVARIANT_VIOLATION` event
-- [x] `GET /api/arena/intent-firewall` — latest verdict for the live round
-- [x] Tests — `test_intent_firewall.py`
+- [x] `GET /api/arena/intent-firewall`. Latest verdict for the live round
+- [x] Tests, `test_intent_firewall.py`
 - [ ] Frontend panel (deferred to Module 1 UI pass, see Phase P2)
 - [x] `intent_model.py` / `intent_compiler.py` / `intent_normalizer.py` /
-      `intent_validator.py` / `semantic_engine.py` / `policy_diff.py` —
+      `intent_validator.py` / `semantic_engine.py` / `policy_diff.py`,
       **descoped as separate files.** The master prompt's 8-file split adds
       indirection without new behaviour on top of what already exists
       (`invariant_engine.py` already normalizes/validates/diffs). Their real
       logic lives in `drift_engine.py` + `firewall_decision.py` instead. Noted
       here explicitly rather than silently dropped.
 - Attacks A (Budget Drift), B (Rail Substitution), C (Semantic Laundering),
-  D (Temporal Drift) — **already implemented**, pre-existing: A/D map to
+  D (Temporal Drift), **already implemented**, pre-existing: A/D map to
   `INV_01`/`INV_06` via `CROSS_RAIL_SPLIT`/`LAPSED_MANDATE`, B maps to `INV_04`
   via `RAIL_SCOPE_VIOLATION`, C maps to `INV_02` via `INTENT_LAUNDERING`.
-- [ ] Attack F (Constraint Erosion — multi-step grocery→credit→voucher→crypto
-      chain) — deferred, needs a multi-transaction narrative vector; tracked
+- [ ] Attack F (Constraint Erosion. Multi-step grocery→credit→voucher→crypto
+      chain). Deferred, needs a multi-transaction narrative vector; tracked
       under Module 5 (Adaptive Immune multi-round campaigns) instead since it's
       inherently a sequence, not a single-shot vector.
 
-### Module 2 — Agentic Payment Deception Lab (`backend/app/deception_lab/`)
+### Module 2: Agentic Payment Deception Lab (`backend/app/deception_lab/`)
 - [x] Prompt Injection vector (merchant catalogue returns injected override text)
 - [x] Tool Output Poisoning vector (search tool misreports item category)
 - [x] Context / Memory Poisoning vector (stale-approval claim)
 - [x] Authority Impersonation / sub-agent self-approval vector
 - [x] Wiring into orchestrator (`DECEPTION_LAB_VERDICT` event, rounds 11-14) + tests
 - [x] `GET /api/arena/deception-lab`
-- [ ] Frontend panel — deferred to Phase P2, same as Module 1's
+- [ ] Frontend panel. Deferred to Phase P2, same as Module 1's
 
-### Module 3 — Agentic Payment Kill Chain (`backend/app/kill_chain/`)
+### Module 3: Agentic Payment Kill Chain (`backend/app/kill_chain/`)
 - [x] 11-stage lifecycle event model (`kill_chain/stages.py`)
 - [x] Per-run scoring: detected/contained/time_to_detection_ms/
       economic_exposure_prevented_inr/blast_radius_score/attack_chain_score
@@ -76,10 +76,10 @@ under `backend/app/`.
       stages covered; GOAL_HIJACKING, SETTLEMENT_CONFLICT,
       RECONCILIATION_DRIFT have no vector yet - honestly reported, not faked)
 - [x] Session-level `coverage()` rollup + `GET /api/arena/kill-chain`
-- [ ] Frontend visualizer — deferred to Phase P2
+- [ ] Frontend visualizer. Deferred to Phase P2
 
-### Module 4 — Payment Graph Sentinel (`backend/app/graph_sentinel/`)
-- [x] Entity graph builder — **descoped to agent + merchant + device**, not
+### Module 4: Payment Graph Sentinel (`backend/app/graph_sentinel/`)
+- [x] Entity graph builder, **descoped to agent + merchant + device**, not
       the full 11-node-type schema in the master prompt. This codebase's
       transaction model has real fields only for agent/merchant/rail/
       beneficiary; SubAgent, Wallet, and a separate PaymentMethod node would
@@ -88,7 +88,7 @@ under `backend/app/`.
       its own dimension (Module 1); adding graph nodes for either would
       duplicate signal, not add it. Documented rather than silently narrowed.
 - [x] Graph features: degree, PageRank, betweenness centrality, Louvain
-      community, shared-device concentration, cross-rail fan-out velocity —
+      community, shared-device concentration, cross-rail fan-out velocity,
       6 of 7 listed features implemented. "Beneficiary concentration index"
       not added: `beneficiary_scope`/`vpa_delegate` is populated only on
       Module 1's hand-authored demo vectors, not on the bulk synthetic
@@ -99,17 +99,17 @@ under `backend/app/`.
       (was 29).
 - [x] Ablation: added the two missing points to the existing `ablation.py`
       (`A_all_features` was already Full Hybrid, `F_raw_only` was already Raw
-      Only) — `H_raw_plus_dtl` and `I_raw_plus_dtl_plus_graph`, plus a
+      Only), `H_raw_plus_dtl` and `I_raw_plus_dtl_plus_graph`, plus a
       `measured_graph_feature_lift` block alongside the pre-existing
       `measured_dtl_feature_lift`.
 
-### Module 5 — Adaptive Fraud Immune System
-- [x] **Descoped from a new `backend/app/immune/` package** — this module's
+### Module 5: Adaptive Fraud Immune System
+- [x] **Descoped from a new `backend/app/immune/` package**, this module's
       whole point is escalating the SAME `BluePolicyAdapter` that already
       exists in `feedback/`, not standing up a parallel system next to it.
       Extended `feedback/policy_adapter.py` and `feedback/feedback_engine.py`
       in place instead.
-- [x] Blue-side hardening loop — **corrected a wrong assumption in this
+- [x] Blue-side hardening loop, **corrected a wrong assumption in this
       roadmap's own Module 5 framing**: `BluePolicyAdapter.adapt_policy` and
       its wiring through `ClosedLoopFeedbackEngine.record_round_outcome`
       already existed and were already live in the orchestrator before this
@@ -119,16 +119,16 @@ under `backend/app/`.
       ladder (soft response → `CAPABILITY_QUARANTINED` on repeat →
       `AGENT_SUSPENDED` on persistent repeat, capped) keyed off a real count
       of prior occurrences of that invariant this session.
-- [x] Attack F (Constraint Erosion) — `redteam/vectors/constraint_erosion.py`
+- [x] Attack F (Constraint Erosion), `redteam/vectors/constraint_erosion.py`
       (round 15): four escalating legs (groceries → small store-credit slice
       → larger voucher → near-total crypto-token conversion), reusing
       `INV_02_SEMANTIC_INTENT_DRIFT` with no new invariant. Fills what was
       previously the unmapped `GOAL_HIJACKING` kill-chain stage.
-- [x] Multi-round campaign runner — `ArenaBattleOrchestrator.run_campaign()` +
+- [x] Multi-round campaign runner, `ArenaBattleOrchestrator.run_campaign()` +
       `POST /api/arena/campaign`. **Deliberately not the master prompt's
       exact §7.1 script**: that script's round 3 is "blocked by Graph
       Sentinel," but graph features are a training-time signal (Module 4),
-      never evaluated per-transaction in the live single-authority arena —
+      never evaluated per-transaction in the live single-authority arena,
       scripting that moment would misrepresent what the live system does.
       The default campaign instead runs `RAIL_SCOPE_VIOLATION` three times,
       demonstrating something the live arena genuinely does end-to-end: the
@@ -140,47 +140,47 @@ under `backend/app/`.
 
 ---
 
-## Phase P1 — Intelligence & Benchmarks
-- [x] Graph ML feature extraction & ablation benchmarking — done as part of
+## Phase P1: Intelligence & Benchmarks
+- [x] Graph ML feature extraction & ablation benchmarking. Done as part of
       Module 4 (`H_raw_plus_dtl` / `I_raw_plus_dtl_plus_graph` variants,
       `measured_graph_feature_lift`).
-- [x] Counterfactual engine extended — `/api/ai/counterfactual` now proposes
+- [x] Counterfactual engine extended, `/api/ai/counterfactual` now proposes
       and replays RAIL ("what if the card rail had been disabled") and
       PURPOSE ("what if gift cards had been permitted") mutations alongside
       the original AMOUNT ceiling sweep, gated so a vector with its own fixed
       authority profile (RAIL_SCOPE_VIOLATION, PER_TX_BREACH, LAPSED_MANDATE,
-      BENEFICIARY_DRIFT, CONSTRAINT_EROSION) only ever offers AMOUNT —
+      BENEFICIARY_DRIFT, CONSTRAINT_EROSION) only ever offers AMOUNT,
       offering RAIL/PURPOSE there would be silently overwritten by that
       vector's own profile at replay time and misrepresent what was tested.
       Tests verify the sandboxed grant was actually mutated (read back from
       the replayed result, not just echoed from the request).
-- [x] Structured incident report generator extended — `write_incident_report`
+- [x] Structured incident report generator extended, `write_incident_report`
       now returns a `deterministic_appendix` (kill-chain stage/score, Intent
       Firewall hard-drift count + violating dimensions, Deception Lab
       detection count + types) sourced directly from the round result, never
-      from the model, and present even when the LLM is unavailable — an
+      from the model, and present even when the LLM is unavailable, an
       incident report's FACTS must not depend on LLM availability, only its
       narrative prose does.
-- [x] Agent Council roster check — **confirmed by inspection, not assumed**:
+- [x] Agent Council roster check, **confirmed by inspection, not assumed**:
       all 5 of the master prompt's named roles (Intent Compiler, Semantic
       Cart Auditor, Adversarial Strategist, Counterfactual Analyst, Incident
       Report Writer) already exist verbatim in the 12-agent roster. Nothing
       added.
 
-## Phase P2 — UI & Governance Polish
-- [x] Intent Firewall panel — new card on the arena page, live drift verdict
+## Phase P2: UI & Governance Polish
+- [x] Intent Firewall panel. New card on the arena page, live drift verdict
       + violating dimensions, sourced from `lastRound.firewall_verdicts`
       (already streamed with every round result, no extra fetch needed).
-- [x] Deception Lab panel — new card, detection count + explanations from
+- [x] Deception Lab panel. New card, detection count + explanations from
       `lastRound.deception_verdicts`.
-- [x] Kill-chain per-round view — new card (stage, detection latency, chain
+- [x] Kill-chain per-round view. New card (stage, detection latency, chain
       score, exposure prevented, blast radius). **Force-directed graph
       canvas explicitly descoped** (see note below) in favour of this
       per-round scorecard, which is what the live arena can honestly show.
-- [x] Regulatory Mapper — **already existed** as a working `AgentCard` on
+- [x] Regulatory Mapper, **already existed** as a working `AgentCard` on
       the AI Studio page (`regulatory_mapper` agent, wired since before this
       session). Confirmed via inspection; no new UI needed.
-- [x] Unified Risk Engine — **built** (`backend/app/risk_engine/`, new this
+- [x] Unified Risk Engine, **built** (`backend/app/risk_engine/`, new this
       phase, not merely wired): a composite of DTL/Firewall/Deception/ML/
       Kill-Chain signals every other module already produces. Equal-weighted
       mean, explicitly documented as a synthesis with no fitted weights
@@ -188,14 +188,14 @@ under `backend/app/`.
       detector. `deterministic_override` makes explicit that the DTL
       invariant decided the round's outcome before this score was even
       computed. Surfaced as a new "Unified risk" fact in `VerdictBanner`.
-- [x] Cost Governor `CAPABILITY_QUARANTINE` — **confirmed, not duplicated**:
+- [x] Cost Governor `CAPABILITY_QUARANTINE`, **confirmed, not duplicated**:
       `DefensePolicy.CAPABILITY_QUARANTINED` and the `CAPABILITY_REDUCTION`
       event it triggers already existed pre-Module-5, and are now also the
       2nd rung of the Module 5 escalation ladder. No new event needed.
-- [x] Counterfactual RAIL/PURPOSE dimensions — `ai/page.tsx`'s
+- [x] Counterfactual RAIL/PURPOSE dimensions, `ai/page.tsx`'s
       `ResultBody` for `counterfactual_analyst` now renders per-dimension
       parameter summaries, not just ceilings tested.
-- [x] Incident report cross-module facts — `deterministic_appendix` now
+- [x] Incident report cross-module facts, `deterministic_appendix` now
       renders in `ai/page.tsx`, **including the case ResultBody itself never
       reaches** (LLM unavailable, `result.result` is null) - a real gap
       found and fixed while building this: `AgentCard` only rendered
@@ -203,13 +203,13 @@ under `backend/app/`.
       exactly when the "present regardless of LLM availability" guarantee
       mattered most. Fixed with a fallback render path in `AgentCard`
       itself, verified live in both states (LLM answering and not).
-- [x] Ablation page — ★ required **no new fetching logic**: the existing
+- [x] Ablation page, ★ required **no new fetching logic**: the existing
       table already iterates `ablation.variants` generically, so the new
       H/I graph variants appeared automatically. Added the one thing that
       genuinely needed new UI: `measured_dtl_feature_lift` and
       `measured_graph_feature_lift` callouts, which existed in the API
       response since before this session but were never rendered anywhere.
-- [ ] **Force-Directed Graph Sentinel canvas — deliberately descoped.**
+- [ ] **Force-Directed Graph Sentinel canvas, deliberately descoped.**
       Graph Sentinel's entity graph is a training-time construct
       (`graph_sentinel/graph_builder.py`, built once per dataset generation
       run across 25 synthetic authorities) - there is no live, per-round
@@ -223,19 +223,19 @@ under `backend/app/`.
 
 ## Session log
 
-**2026-08-21** — Module 1 (Intent Firewall) backend complete and verified:
+**2026-08-21**. Module 1 (Intent Firewall) backend complete and verified:
 - `BENEFICIARY` added as a 7th authority dimension (`models/state.py`):
   `beneficiary_scope` field (empty = unconstrained, same convention as
   `permitted_mccs`), `allows_beneficiary()`, `authority_vector()` row.
 - `INV_07_UNAUTHORIZED_BENEFICIARY` added to `dtl/invariant_engine.py`,
-  additive — the original 6 invariants, their codes, and their evaluation
+  additive, the original 6 invariants, their codes, and their evaluation
   order are untouched (verified by
   `test_registry_covers_every_dimension_exactly_once`, updated to include
   BENEFICIARY rather than replaced).
-- `backend/app/redteam/vectors/beneficiary_drift.py` — Attack E
+- `backend/app/redteam/vectors/beneficiary_drift.py`. Attack E
   (`BeneficiaryDriftVector`): legitimate leg to the authorised utility VPA,
   diverted leg to a different VPA with rail/amount/MCC all still in scope.
-- `backend/app/intent_firewall/` (new package) — `drift_engine.py` reshapes
+- `backend/app/intent_firewall/` (new package), `drift_engine.py` reshapes
   the SemanticDriftProof objects the invariant engine already produces into a
   per-dimension drift vector; `firewall_decision.py` turns that into
   ALLOW / PARTIAL_DRIFT / HARD_DRIFT keyed off each invariant's existing
@@ -251,11 +251,11 @@ under `backend/app/`.
 - **Found and fixed a real integration gap while testing**: adding
   `BENEFICIARY_DRIFT` to the orchestrator without a matching entry in
   `feedback/adaptive_planner.py`'s `STRATEGY_PROFILE` would have made it
-  runnable manually but unreachable by the adaptive Red planner — caught by
+  runnable manually but unreachable by the adaptive Red planner, caught by
   the pre-existing `test_every_orchestrator_strategy_has_a_planner_profile`
   test, not by inspection. Added the missing profile entry (round 10,
   `base_prior=0.72`).
-- `GET /api/arena/intent-firewall` — latest round's verdicts + counts.
+- `GET /api/arena/intent-firewall`, latest round's verdicts + counts.
   `AuthorityScopeRequest` gained `beneficiary_scope` so an operator can set it
   via the same endpoint as the other five dimensions.
 - Taxonomy: vector 56 added to both `taxonomy.py` (`IMPLEMENTED[56]`) and
@@ -265,36 +265,36 @@ under `backend/app/`.
   behaviour, vector profile, drift engine, verdict thresholds).
 - **Verified, not just unit-tested**: ran a full round 10 through the live
   orchestrator (`run_round_stream`) and through the actual FastAPI
-  `TestClient` hitting `/api/arena/intent-firewall` — confirmed the legit leg
+  `TestClient` hitting `/api/arena/intent-firewall`. Confirmed the legit leg
   scores `ALLOW`/`0.0` and the diverted leg scores `HARD_DRIFT`/`0.82` with
   `beneficiary_drift` as the only nonzero dimension, exactly as designed.
 - Full backend suite: **91/91 passing** (was 79 before this session; +1 new
   invariant's worth of dimension tests +13 firewall tests, 2 pre-existing
   tests updated for the 7th dimension, 1 pre-existing gap fixed).
 - **Not done**: frontend panel for the firewall verdict (deferred to Phase
-  P2, alongside the other UI work) — the backend event
+  P2, alongside the other UI work), the backend event
   (`INTENT_FIREWALL_VERDICT`) is already streaming over the existing
   WebSocket, so the UI work is additive whenever it's picked up, not blocked
   on anything further from the backend.
 
 ---
 
-**2026-08-21 (continued)** — Module 2 (Agentic Payment Deception Lab) backend
+**2026-08-21 (continued)**. Module 2 (Agentic Payment Deception Lab) backend
 complete and verified:
 - New models: 4 optional fields on `SyntheticTransaction`
   (`injected_payload`, `tool_reported_category`, `claimed_prior_authorization`,
   `self_approved`/`approving_agent_id`) and a new `DeceptionProof` model,
-  deliberately separate from `SemanticDriftProof` — a deception proof says
+  deliberately separate from `SemanticDriftProof`, a deception proof says
   "the agent was fed a false premise," not "this action is outside the grant."
   These are genuinely orthogonal concerns: a Deception Lab attack vector can
   be (and every one here is) authority-clean, i.e. it passes every DTL
   invariant, and detection still fires. Verified directly:
   `test_injection_does_not_change_the_authorization_outcome`.
-- `backend/app/deception_lab/detectors.py` — 4 deterministic detectors
+- `backend/app/deception_lab/detectors.py`, 4 deterministic detectors
   (prompt injection via keyword/pattern match, tool-output vs. ground-truth
   SKU mismatch, claimed-ceiling vs. live-signed-grant mismatch, self-approval
   identity check). Each detector's docstring/proof explicitly states which
-  authorization-relevant code path does NOT read the deceptive field — the
+  authorization-relevant code path does NOT read the deceptive field, the
   claim being demonstrated is "detection is defense-in-depth, not the
   security boundary," and that's what's actually tested, not just asserted in
   a comment.
@@ -305,7 +305,7 @@ complete and verified:
   independent of `dtl_enabled` (this layer doesn't depend on the ledger being
   on). `STRATEGY_DIMENSION` for these 4 uses a new display-only label
   `"AGENT_INTEGRITY"` rather than forcing them into one of the 7 real
-  `AuthorityDimension` values — noted explicitly in code as NOT a new
+  `AuthorityDimension` values. Noted explicitly in code as NOT a new
   dimension/invariant, to avoid the taxonomy implying these are DTL rows.
 - Applied the Module-1 lesson proactively this time: added
   `adaptive_planner.STRATEGY_PROFILE` entries for all 4 strategies in the same
@@ -317,7 +317,7 @@ complete and verified:
 - New test file `tests/test_deception_lab.py` (18 tests).
 - **Verified, not just unit-tested**: ran all 4 rounds (11-14) through the
   live orchestrator AND through a real FastAPI `TestClient` hitting
-  `/api/arena/deception-lab` — each round's single detection matches its
+  `/api/arena/deception-lab`, each round's single detection matches its
   vector's intended `deception_type` exactly.
 - Full backend suite: **108/108 passing** (was 91 after Module 1).
 - **Known scope boundary, not a bug**: a round's overall `winner`/`outcome`
@@ -327,22 +327,22 @@ complete and verified:
   `WITHIN_AUTHORITY` / `winner: NONE` at the round level even though
   `DECEPTION_LAB_VERDICT` fired mid-round. The per-step event carries the real
   story; unifying the two into one round-level verdict would conflate "stayed
-  inside the grant" with "wasn't deceived," which are different claims — left
+  inside the grant" with "wasn't deceived," which are different claims. Left
   alone deliberately rather than blurred for the sake of one summary field.
 - **Not done**: frontend panel (Phase P2, same status as Module 1's).
 
 ---
 
-**2026-08-21 (continued)** — Module 3 (Agentic Payment Kill Chain) backend
+**2026-08-21 (continued)**. Module 3 (Agentic Payment Kill Chain) backend
 complete and verified:
-- `backend/app/kill_chain/stages.py` — 11-stage lifecycle taxonomy +
+- `backend/app/kill_chain/stages.py`, 11-stage lifecycle taxonomy +
   `STRATEGY_TO_STAGE`, one primary stage per implemented vector (same
   one-mapping-per-vector discipline as `STRATEGY_DIMENSION` in Module 1/2).
   All 14 implemented vectors are mapped; 3 of 11 stages (GOAL_HIJACKING,
   SETTLEMENT_CONFLICT, RECONCILIATION_DRIFT) have no vector yet and
   `coverage()` reports that honestly via `unmapped_rounds`/a gap in
   `by_stage` rather than forcing an approximate mapping to hit 11/11.
-- `backend/app/kill_chain/scoring.py` — `score_round()` computes
+- `backend/app/kill_chain/scoring.py`, `score_round()` computes
   `time_to_detection_ms` and `economic_exposure_prevented_inr` from data the
   round already recorded (event `offset_ms`, the `INVARIANT_VIOLATION`
   proof's own `overshoot`) - nothing re-simulated. `blast_radius_score` and
@@ -365,7 +365,7 @@ complete and verified:
 - Orchestrator: `round_summary["kill_chain"]` attached every round;
   `self.round_history` (session-scoped list, cleared on `reset()` and absent
   from `sandbox()` clones) is the input to `coverage()`.
-- `GET /api/arena/kill-chain` — stage taxonomy + last round's score + session
+- `GET /api/arena/kill-chain`. Stage taxonomy + last round's score + session
   coverage.
 - New test file `tests/test_kill_chain.py` (13 tests, including a guard test
   mirroring the Module-1 gap: every `taxonomy.IMPLEMENTED` vector key must
@@ -376,20 +376,20 @@ complete and verified:
 
 ---
 
-**2026-08-21 (continued)** — Module 4 (Payment Graph Sentinel) backend
+**2026-08-21 (continued)**. Module 4 (Payment Graph Sentinel) backend
 complete and verified, including a real retrain (this is the module that
 touches the trained model/artifacts, flagged and confirmed with the user
 before starting):
 - Added `networkx>=3.0` to `requirements.txt` (installed and used; no
   separate community-detection package needed, `louvain_communities` ships
   in networkx itself).
-- `backend/app/graph_sentinel/graph_builder.py` — `PaymentGraph`: an
+- `backend/app/graph_sentinel/graph_builder.py`, `PaymentGraph`: an
   incrementally-built agent<->merchant graph. Global metrics (PageRank,
   betweenness, Louvain community) are recomputed every 200 transactions
-  rather than per-row — documented as a deliberate batching decision for
+  rather than per-row. Documented as a deliberate batching decision for
   tractability on a full training run, not an accuracy shortcut.
 - `models/transactions.py` gained `device_id` (optional, populated only by
-  the synthetic dataset generator — demo/red-team vectors leave it unset).
+  the synthetic dataset generator. Demo/red-team vectors leave it unset).
 - `feature_schema.py`: new `"graph"` feature group (8 features).
   `extract_features()` gained an optional `graph_features` param; every
   graph_* feature defaults to 0.0 when absent (the live single-authority
@@ -427,7 +427,7 @@ before starting):
 - Regenerated `artifacts/models/{forseti_model.joblib,forseti_xgb.json,
   feature_schema.json}` and `artifacts/evaluation/{metrics.json,
   ablation_results.json}` locally. **These are the exact files your deployed
-  Render backend serves — not yet pushed or redeployed; that stays your call
+  Render backend serves, not yet pushed or redeployed; that stays your call
   as always.** Verified locally end-to-end first: `/api/health` reports
   `model_loaded: true`, `artifacts_missing: []`, and a live arena round
   produces real (non-NaN) ML scores against the retrained model.
@@ -440,7 +440,7 @@ before starting):
 - Updated `docs/FEATURES.md` and `README.md`'s feature-count references
   (29→37, 5 groups→6). **Not updated**: the `LEARN_*` tutorial docs,
   `SESSION_HANDOVER.md`, and `CODEBASE_TUTOR_PROMPT.md` still say "29
-  features" in ~13 places — these are educational/reference docs outside the
+  features" in ~13 places. These are educational/reference docs outside the
   P0-P2 checklist; flagged here as known-stale rather than silently left
   inconsistent, follow-up if wanted.
 - New test file `tests/test_graph_sentinel.py` (17 tests: graph
@@ -450,12 +450,12 @@ before starting):
 
 ---
 
-**2026-08-21 (continued)** — Module 5 (Adaptive Fraud Immune System) backend
+**2026-08-21 (continued)**. Module 5 (Adaptive Fraud Immune System) backend
 complete and verified. Two real gaps found and fixed along the way, not just
 new capability added:
 - **Found via direct inspection before writing any new code**: `INV_07_UNAUTHORIZED_BENEFICIARY`
   (added in Module 1) had NO branch in `dtl/cost_governor.py`'s
-  `apply_containment` — it silently fell through to the generic
+  `apply_containment`. It silently fell through to the generic
   `SHADOW_QUARANTINE` message and never set `active_policy`, unlike every
   other invariant's dedicated containment branch. Fixed with a proper
   `BENEFICIARY_SCOPE_BLOCK` branch (mirrors `RAIL_SCOPE_BLOCK`: consumes no
@@ -497,15 +497,15 @@ new capability added:
 - **Not done**: frontend surfacing of `violation_count`/escalation state or a
   "run campaign" button (Phase P2, same status as every other module's UI).
 
-**Phase P0 is now complete** — all 5 core modules built, tested, and verified
+**Phase P0 is now complete**, all 5 core modules built, tested, and verified
 live end-to-end (91→108→121→138→149→155 backend tests across the five
 modules, zero regressions at any step). Modules 4 and 5 each surfaced a real
 bug that only the numbers/tests exposed (a merchant-identity leakage
 inflating PR-AUC to a fake 1.0; a silently-unescalatable invariant), not
-something visible from reading the diff alone — both are documented above
+something visible from reading the diff alone, both are documented above
 with root cause, not just "fixed."
 
-**Next up**: Phase P1 (Intelligence & Benchmarks) — graph ML feature
+**Next up**: Phase P1 (Intelligence & Benchmarks). Graph ML feature
 extraction is already done as part of Module 4, so P1 narrows to extending
 the counterfactual engine to mutate firewall/graph/kill-chain parameters, a
 richer incident-report generator, and checking whether the master prompt's
@@ -514,7 +514,7 @@ roster before adding anything new.
 
 ---
 
-**2026-08-21 (continued)** — Phase P1 (Intelligence & Benchmarks) complete:
+**2026-08-21 (continued)**. Phase P1 (Intelligence & Benchmarks) complete:
 - **Counterfactual engine**: `agents.propose_counterfactual` gained an
   `available_dimensions` parameter and RAIL/PURPOSE schema branches;
   `/api/ai/counterfactual` computes which dimensions are honest to offer per
@@ -526,7 +526,7 @@ roster before adding anything new.
   echoing the request, so a test can prove the mutation really took effect,
   not just that it was asked for.
 - Tested by monkeypatching the LLM boundary (`agents.propose_counterfactual`)
-  with a canned proposal rather than mocking a provider — the code actually
+  with a canned proposal rather than mocking a provider, the code actually
   worth testing is the deterministic replay logic downstream of the model
   call, which is exactly where this project's own "LLM proposes,
   deterministic system verifies" design draws the line. 8 tests, including
@@ -556,7 +556,7 @@ inspection alone (Module 4's leakage, Module 1's silent containment gap).
 
 ---
 
-**2026-08-21 (continued)** — Phase P2 (UI & Governance Polish) complete,
+**2026-08-21 (continued)**. Phase P2 (UI & Governance Polish) complete,
 plus one small new backend module (Unified Risk Engine) that P2's frontend
 work needed:
 - `backend/app/risk_engine/` (new): `compute_unified_risk()`, a composite
