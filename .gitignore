@@ -1,0 +1,39 @@
+# Secrets. Never commit these.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keys/
+.secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Licensed anchor datasets are never redistributed. See docs/fidelity-methodology.md
+data/anchors/*.csv
