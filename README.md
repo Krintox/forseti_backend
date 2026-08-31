@@ -29,8 +29,8 @@ FORSETI tracks all seven of those dimensions and gives each one its own invarian
 settled + authorized + pending + reserved + new_amount  <=  ceiling
 ```
 
-Six lines in `app/dtl/invariant_engine.py`. No model, nothing fitted, nothing to tune. You could
-write it in a minute, and you should assume we know that. It is in here for two narrow reasons.
+One expression in `app/dtl/invariant_engine.py`. No model, nothing fitted, nothing to tune. You
+could write it in a minute, and you should assume we know that. It is in here for two narrow reasons.
 It shows the gap is real, and because it is arithmetic rather than a learned threshold it cannot
 quietly degrade when an attack family it has never seen shows up.
 
@@ -46,7 +46,7 @@ Treat it as the floor. The work that took real effort is everywhere else.
 | `app/kill_chain/` | Maps an attempt onto the stage of the agentic payment lifecycle it lands in, and scores how far it got before something stopped it. |
 | `app/detector/` | The learned side. 37 features in six groups, chronological split, two attack families held out of training, isotonic calibration, real SHAP, and a leakage audit that fails CI if a categorical shortcut reappears. |
 | `app/feedback/` | The closed loop. Red re-scores its own strategies from the containment and detection it observed, Blue adapts policy, and the next round starts from that state. |
-| `app/dtl/` | The ledger, the seven invariants, the beneficiary directory, the attested SKU catalogue, and the cost governor that contains without locking the customer out. |
+| `app/dtl/` | The ledger, the eight invariants (seven authority dimensions plus `INV_08_MANDATE_SUSPENDED`), the beneficiary directory, the attested SKU catalogue, and the cost governor that contains without locking the customer out. |
 | `app/settlement/` | Post-authorization reconciliation. Settlement conflict and reconciliation drift, modelled deterministically. |
 | `app/crypto/` | ML-DSA-44 (NIST FIPS 204) signing over a canonicalised snapshot that commits to the hash-chained event log head. |
 | `app/fidelity/` | KS, Jensen-Shannon divergence, correlation distance, a synthetic-versus-real discriminator and TSTR. Runs, but reports `NOT RUN` because the anchor datasets are licensed. |
